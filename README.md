@@ -18,6 +18,9 @@ No account, no server: all your data stays on the phone itself.
 - **Plate calculator:** editing a barbell set shows exactly which plates to load on each side.
 - **Workout summary:** after Finish you see duration, sets, volume, new PRs and how it compares with last time.
 - **Streak icon 🔥** at the top of the Today screen.
+- **Edit past workouts** and **log a workout after the fact** (forgot your phone?) from the History tab.
+- **Warm-up sets:** suggested ramp-up sets (with plates) before your first heavy lift.
+- **Backup reminder:** a banner if you haven't exported a backup in 14 days.
 
 ---
 
@@ -133,6 +136,17 @@ To change the exercises inside a session (sets, reps, rest time, weight jump), u
 - Tap any exercise in "Recent PRs", "Biggest improvements" or "All personal records" to see its chart. Tap the chart to read any session.
 - **Plate calculator:** set your bar weight in **Settings → Plate calculator** (default 20 kg).
 
+## Fixing and adding past workouts
+
+- **Edit:** History → tap a workout → **✏️ Edit workout**. You can change any set (tap it), tick or untick sets, swap exercises, change the date, and add notes. "Last time" and records only compare with workouts *before* that one.
+- **Log a past workout:** History → **+ Log a past workout**. Pick the date and session, then enter the sets (they're pre-filled from your previous session; tap **✓ Tick all sets** if you did them as planned).
+  - Leave "Count it in my rotation" on if it replaced a planned session, so "next session" moves on.
+  - If you leave without ticking anything, the app offers to delete the empty workout.
+
+## Backups
+
+Your data lives only on your phone. If you haven't exported in **14 days**, the Today screen shows a 💾 banner. **Back up now** opens the share sheet, so you can save to Files, Google Drive or iCloud, or email it to yourself. **Later** hides it for 3 days. **Settings → Backup** shows when you last backed up.
+
 ## How the rotation works
 
 - A **training session waits for you**: if Push is next and you skip the gym for 3 days, it's still Push.
@@ -159,7 +173,7 @@ src/
                demo.ts (tutorial sample data), db.ts (on-phone database + tutorial mode),
                actions.ts (start/finish/swap/backup/split editing)
   logic/       pure functions + tests: rotation, progression, streak, deload, reminders,
-               progress (e1RM, PRs, volume), plates
+               progress (e1RM, PRs, volume), plates, warmup, backup
   screens/     Today, Workout, Progress, History, Body, Settings, SplitEditor, TemplateEditor
   components/  RestTimer, Stepper, Sheet, NoteField, WeightChart, LineChart, BarChart, Tour (tutorial)
 .github/workflows/deploy.yml   auto-publish to GitHub Pages

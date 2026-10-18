@@ -12,6 +12,10 @@ import { reminderDue } from '../useReminders';
 import { computeStreak, toStreakWorkouts } from '../logic/streak';
 import { findPRs, fmtSet, fmtVolume, workoutVolume } from '../logic/progress';
 import type { Tab } from '../App';
+import { backupDue } from '../logic/backup';
+import { exportBackupFile } from '../logic/shareBackup';
+import { snoozeBackupReminder } from '../db/actions';
+import { isTutorial } from '../db/db';
 import { Sheet } from '../components/Sheet';
 
 export function TodayScreen({
@@ -56,6 +60,15 @@ export function TodayScreen({
   const finished = workouts.filter((w) => w.finishedAt);
   const streak = computeStreak(toStreakWorkouts(finished, rot), rot, today);
   const summary = summaryId !== null ? finished.find((w) => w.id === summaryId) : undefined;
+  const firstWorkout = finished.reduce<string | null>((min, w) => (!min || w.date < min ? w.date : min), null);
+  const backupDays = isTutorial
+    ? null
+    : backupDue({
+        lastBackup: settings.lastBackup ?? null,
+        firstWorkout,
+        snoozedUntil: settings.backupSnoozedUntil ?? null,
+        today,
+      });
 
   return (
     <div>
@@ -113,6 +126,19 @@ export function TodayScreen({
           <div className="row spread">
             <span>Workout in progress: <b>{tMap.get(active.templateId)?.name}</b></span>
             <button className="primary small" onClick={onGoWorkout}>Resume</button>
+          </div>
+        </div>
+      )}
+
+      {backupDays !== null && (
+        <div className="banner warn backup-banner">
+          <b>💾 {settings.lastBackup ? `Last backup: ${backupDays} days ago` : 'You haven’t backed up yet'}</b>
+          <div className="small" style={{ margin: '4px 0 10px' }}>
+            Your workouts live only on this phone. Save a copy to Drive, iCloud or email - it takes 10 seconds.
+          </div>
+          <div className="btn-row">
+            <button className="primary" onClick={() => void exportBackupFile()}>Back up now</button>
+            <button onClick={() => snoozeBackupReminder(3)}>Later</button>
           </div>
         </div>
       )}

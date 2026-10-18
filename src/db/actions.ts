@@ -4,7 +4,7 @@ import type { Exercise, LoggedSet, Slot, Template, Workout, WorkoutEntry } from 
 import { DEFAULT_ROTATION, buildTemplates } from './seed';
 import { advanceAfterWorkout, findSlotFor, resolveRotation } from '../logic/rotation';
 import { prefillSets } from '../logic/progression';
-import { todayStr } from '../logic/dates';
+import { addDays, daysBetween, todayStr } from '../logic/dates';
 
 export const DEFAULT_REST_FIRST = 150;
 export const DEFAULT_REST_OTHER = 90;
@@ -20,9 +20,10 @@ export interface LastPerf {
  * Normal (non-deload) workouts win, so a deload week doesn't reset your
  * "last time" weights.
  */
-export function lastPerformanceMap(workouts: Workout[], excludeId?: number): Map<string, LastPerf> {
+export function lastPerformanceMap(workouts: Workout[], excludeId?: number, beforeTs = Infinity): Map<string, LastPerf> {
   const finished = workouts
-    .filter((w) => w.finishedAt && w.id !== excludeId)
+    // beforeTs: when editing an old workout, "last time" means before it.
+    .filter((w) => w.finishedAt && w.id !== excludeId && w.finishedAt < beforeTs)
     .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
   const map = new Map<string, LastPerf>();
   for (const pass of [false, true]) {
@@ -38,9 +39,9 @@ export function lastPerformanceMap(workouts: Workout[], excludeId?: number): Map
 }
 
 /** The note from the last finished workout of this template. */
-export function lastWorkoutNote(workouts: Workout[], templateId: string): string {
+export function lastWorkoutNote(workouts: Workout[], templateId: string, beforeTs = Infinity): string {
   const last = workouts
-    .filter((w) => w.finishedAt && w.templateId === templateId)
+    .filter((w) => w.finishedAt && w.templateId === templateId && w.finishedAt < beforeTs)
     .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0];
   return last?.note ?? '';
 }
@@ -69,25 +70,29 @@ function buildEntry(
   };
 }
 
-export async function startWorkout(templateId: string, deload: boolean): Promise<number> {
-  const [settings, template, exercises, workouts] = await Promise.all([
-    getSettings(),
+/** Today's exercises for a template, pre-filled from what you did before `beforeTs`. */
+async function entriesFor(templateId: string, deload: boolean, beforeTs = Infinity): Promise<WorkoutEntry[]> {
+  const [template, exercises, workouts] = await Promise.all([
     db.templates.get(templateId),
     db.exercises.toArray(),
     db.workouts.toArray(),
   ]);
   if (!template) throw new Error('Template not found');
   const exMap = new Map(exercises.map((e) => [e.id, e]));
-  const last = lastPerformanceMap(workouts);
-  const today = todayStr();
-  const state = resolveRotation(settings.rotationState, settings.rotation, today);
-
-  const entries = template.items.flatMap((item, i) => {
+  const last = lastPerformanceMap(workouts, undefined, beforeTs);
+  return template.items.flatMap((item, i) => {
     const ex = exMap.get(item.exerciseId);
     if (!ex) return [];
     const rest = item.restSeconds ?? (i === 0 ? DEFAULT_REST_FIRST : DEFAULT_REST_OTHER);
     return [buildEntry(ex, item, rest, last.get(ex.id), deload)];
   });
+}
+
+export async function startWorkout(templateId: string, deload: boolean): Promise<number> {
+  const settings = await getSettings();
+  const entries = await entriesFor(templateId, deload);
+  const today = todayStr();
+  const state = resolveRotation(settings.rotationState, settings.rotation, today);
 
   return db.workouts.add({
     date: today,
@@ -252,4 +257,74 @@ export async function restoreDefaultSplit(): Promise<void> {
     else if (existing.archived) await db.templates.update(t.id, { archived: false });
   }
   await saveRotation([...DEFAULT_ROTATION], 0);
+}
+
+// ---------- Past workouts ----------
+
+/** A timestamp on that day: now for today, midday for earlier days. */
+function stampFor(date: string): number {
+  if (date === todayStr()) return Date.now();
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 12).getTime();
+}
+
+/**
+ * Log a workout you did but didn't record (e.g. forgot your phone).
+ * countInRotation = it replaces a planned session, so the rotation moves on.
+ * Returns the new workout id, ready to edit.
+ */
+export async function logPastWorkout(templateId: string, date: string, countInRotation: boolean): Promise<number> {
+  const settings = await getSettings();
+  const finishedAt = stampFor(date);
+  const entries = await entriesFor(templateId, false, finishedAt);
+  const id = await db.workouts.add({
+    date,
+    templateId,
+    slotIndex: settings.rotation.indexOf(templateId),
+    startedAt: finishedAt - 60 * 60_000,
+    finishedAt,
+    deload: false,
+    note: '',
+    entries,
+  });
+  const patch: Partial<typeof settings> = {};
+  if (!settings.deloadCycleStart || date < settings.deloadCycleStart) patch.deloadCycleStart = date;
+  if (countInRotation) {
+    const state = resolveRotation(settings.rotationState, settings.rotation, todayStr());
+    const next = advanceAfterWorkout(state, settings.rotation, templateId, date);
+    // Never move "due" into the past beyond today: a training day waits for you.
+    patch.rotationState = { index: next.index, since: next.since > todayStr() ? next.since : todayStr() };
+  }
+  await updateSettings(patch);
+  return id;
+}
+
+/** Move a finished workout to another day (keeps its duration). */
+export async function setWorkoutDate(id: number, date: string): Promise<void> {
+  await mutateWorkout(id, (w) => {
+    const shift = daysBetween(w.date, date) * 86_400_000;
+    return {
+      ...w,
+      date,
+      startedAt: w.startedAt + shift,
+      finishedAt: w.finishedAt !== undefined ? w.finishedAt + shift : undefined,
+    };
+  });
+}
+
+export async function markAllSetsDone(id: number): Promise<void> {
+  await mutateWorkout(id, (w) => ({
+    ...w,
+    entries: w.entries.map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, done: true })) })),
+  }));
+}
+
+// ---------- Backup reminder ----------
+
+export async function markBackedUp(): Promise<void> {
+  await updateSettings({ lastBackup: todayStr(), backupSnoozedUntil: undefined });
+}
+
+export async function snoozeBackupReminder(days = 3): Promise<void> {
+  await updateSettings({ backupSnoozedUntil: addDays(todayStr(), days) });
 }

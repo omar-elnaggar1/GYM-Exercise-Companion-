@@ -100,4 +100,8 @@ export interface Settings {
   timerVibrate: boolean;
   /** Empty barbell weight for the plate calculator (default 20). */
   barWeight?: number;
+  /** Date of the last Export (YYYY-MM-DD). */
+  lastBackup?: string;
+  /** Backup reminder hidden until this date. */
+  backupSnoozedUntil?: string;
 }

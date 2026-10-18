@@ -3,12 +3,22 @@ import { useState } from 'react';
 import type { Settings, Workout } from '../db/types';
 import { byId, useExercises, useTemplates } from '../hooks';
 import { computeStreak, toStreakWorkouts } from '../logic/streak';
-import { formatNiceDate, todayStr, toDateStr } from '../logic/dates';
+import { addDays, formatNiceDate, todayStr, toDateStr } from '../logic/dates';
 import { formatLast } from '../logic/progression';
-import { deleteWorkout } from '../db/actions';
+import { deleteWorkout, logPastWorkout } from '../db/actions';
+import { todayStatus } from '../logic/rotation';
 import { Sheet } from '../components/Sheet';
 
-export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; settings: Settings }) {
+export function HistoryScreen({
+  workouts,
+  settings,
+  onEditWorkout,
+}: {
+  workouts: Workout[];
+  settings: Settings;
+  onEditWorkout: (id: number) => void;
+}) {
+  const [logging, setLogging] = useState(false);
   const templates = byId(useTemplates());
   const exercises = byId(useExercises());
   const today = todayStr();
@@ -89,6 +99,8 @@ export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; set
         </div>
       </div>
 
+      <button className="big" onClick={() => setLogging(true)}>+ Log a past workout</button>
+
       <h2>{selected ? formatNiceDate(selected) : 'Recent workouts'}</h2>
       {list.length === 0 && <p className="muted">{selected ? 'No workout this day.' : 'No workouts yet. Your first one will show up here.'}</p>}
       {list.map((w) => {
@@ -123,8 +135,18 @@ export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; set
             );
           })}
           <button
-            className="danger"
+            className="primary"
             style={{ width: '100%', marginTop: 14 }}
+            onClick={() => {
+              onEditWorkout(open.id!);
+              setOpen(null);
+            }}
+          >
+            ✏️ Edit workout
+          </button>
+          <button
+            className="danger"
+            style={{ width: '100%', marginTop: 10 }}
             onClick={async () => {
               if (!confirm('Delete this workout from your history?')) return;
               await deleteWorkout(open.id!);
@@ -135,6 +157,75 @@ export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; set
           </button>
         </Sheet>
       )}
+
+      {logging && (
+        <LogPastSheet
+          settings={settings}
+          defaultDate={selected && selected <= today ? selected : addDays(today, -1)}
+          onClose={() => setLogging(false)}
+          onCreated={(id) => {
+            setLogging(false);
+            onEditWorkout(id);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Pick a date and a session, then fill in the sets. */
+function LogPastSheet({
+  settings,
+  defaultDate,
+  onClose,
+  onCreated,
+}: {
+  settings: Settings;
+  defaultDate: string;
+  onClose: () => void;
+  onCreated: (id: number) => void;
+}) {
+  const templates = useTemplates().filter((t) => !t.archived);
+  const today = todayStr();
+  const [date, setDate] = useState(defaultDate);
+  const next = settings.rotation[todayStatus(settings.rotationState, settings.rotation, today).index];
+  const [tid, setTid] = useState<string | null>(next !== 'rest' ? next : null);
+  const [count, setCount] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Sheet title="Log a past workout" onClose={onClose}>
+      <p className="small muted" style={{ marginTop: 0 }}>For days you trained but didn't record it (forgot your phone, dead battery…).</p>
+      <label className="field">
+        <span>Date</span>
+        <input type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
+      </label>
+      <div className="small muted" style={{ marginBottom: 6 }}>Session</div>
+      {templates.map((t) => (
+        <button key={t.id} className={'list-btn' + (tid === t.id ? ' primary' : '')} onClick={() => setTid(t.id)}>
+          <span className="row">
+            <span className="dot" style={{ background: t.color }} />
+            {t.name}
+          </span>
+          {tid === t.id && <span>✓</span>}
+        </button>
+      ))}
+      <label className="row" style={{ margin: '8px 0 14px', alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={count} onChange={(e) => setCount(e.target.checked)} style={{ width: 28, minHeight: 28, flex: 'none' }} />
+        <span className="small">
+          Count it in my rotation (it replaced a planned session, so move my “next session” on)
+        </span>
+      </label>
+      <button
+        className="primary big"
+        disabled={!tid || busy}
+        onClick={async () => {
+          setBusy(true);
+          onCreated(await logPastWorkout(tid!, date, count));
+        }}
+      >
+        Next: enter the sets
+      </button>
+    </Sheet>
   );
 }

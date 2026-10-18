@@ -7,7 +7,9 @@ import { todayStatus } from '../logic/rotation';
 import { acceptDeload, deloadStatus } from '../logic/deload';
 import { todayStr } from '../logic/dates';
 import { notificationsSupported, showNotification } from '../logic/reminders';
-import { exportAll, importAll } from '../db/actions';
+import { importAll } from '../db/actions';
+import { exportBackupFile } from '../logic/shareBackup';
+import { formatNiceDate } from '../logic/dates';
 import { TemplateEditor } from './TemplateEditor';
 import { SplitEditor } from './SplitEditor';
 
@@ -44,26 +46,8 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
   const slotName = (s: string) => (s === 'rest' ? 'Rest' : templates.get(s)?.name ?? s);
 
   const doExport = async () => {
-    const json = await exportAll();
-    const name = `gym-backup-${today}.json`;
-    const file = new File([json], name, { type: 'application/json' });
-    // On phones, the share sheet lets you save to Files / Drive / email it.
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Gym backup' });
-        setMsg('Backup shared ✅');
-        return;
-      } catch (e) {
-        if ((e as Error).name === 'AbortError') return;
-      }
-    }
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setMsg('Backup downloaded ✅');
+    const r = await exportBackupFile();
+    if (r !== 'cancelled') setMsg(r === 'shared' ? 'Backup shared ✅' : 'Backup downloaded ✅');
   };
 
   const doImport = async (file: File) => {
@@ -169,6 +153,9 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
       <div className="card">
         <p className="small muted" style={{ marginTop: 0 }}>
           Your data lives only on this phone. Export a backup regularly and keep it somewhere safe (Google Drive, iCloud, email).
+        </p>
+        <p className="small" style={{ marginTop: 0 }}>
+          Last backup: <b>{settings.lastBackup ? formatNiceDate(settings.lastBackup) : 'never'}</b>
         </p>
         <div className="btn-row">
           <button className="primary" onClick={doExport}>⬇ Export</button>

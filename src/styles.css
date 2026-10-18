@@ -388,3 +388,19 @@ button.slot-btn { width: 44px; flex: none; }
 }
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin: 10px 0; }
 .summary-grid .n { font-size: 22px; font-weight: 800; }
+
+/* ---------- Warm-up ---------- */
+.warmup { margin-top: 8px; }
+.warmup-toggle { padding: 0 4px; color: var(--warn); }
+.warmup-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 6px;
+  background: transparent;
+  border-style: dashed;
+  font-weight: 400;
+}
+.warmup-row.crossed { opacity: 0.45; text-decoration: line-through; }

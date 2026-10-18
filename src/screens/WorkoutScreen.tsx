@@ -2,9 +2,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Exercise, LoggedSet, Settings, Workout, WorkoutEntry } from '../db/types';
 import { byId, useExercises, useTemplates } from '../hooks';
-import { deleteWorkout, finishWorkout, lastPerformanceMap, lastWorkoutNote, mutateWorkout, swapExercise, type LastPerf } from '../db/actions';
+import {
+  deleteWorkout,
+  finishWorkout,
+  lastPerformanceMap,
+  lastWorkoutNote,
+  markAllSetsDone,
+  mutateWorkout,
+  setWorkoutDate,
+  swapExercise,
+  type LastPerf,
+} from '../db/actions';
 import { fmtKg, formatLast, suggestProgression } from '../logic/progression';
-import { formatNiceDate } from '../logic/dates';
+import { formatNiceDate, todayStr } from '../logic/dates';
+import { warmupSets, type WarmupSet } from '../logic/warmup';
 import { unlockAudio } from '../logic/alerts';
 import { useWakeLock } from '../useWakeLock';
 import { findPRs, fmtSet, isSetPR, type PRRecord } from '../logic/progress';
@@ -22,21 +33,27 @@ interface Props {
   /** Called with the workout id after Finish (to show the summary). */
   onFinished: (id: number) => void;
   onGoToday: () => void;
+  /** 'edit' = fixing a finished workout from History (no timer, no Finish). */
+  mode?: 'live' | 'edit';
+  onDone?: () => void;
 }
 
-export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClose, onFinished, onGoToday }: Props) {
+export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClose, onFinished, onGoToday, mode = 'live', onDone }: Props) {
+  const isEdit = mode === 'edit';
   const exercises = byId(useExercises());
   const templates = byId(useTemplates());
   const [editing, setEditing] = useState<{ entry: number; set: number } | null>(null);
   const [swapping, setSwapping] = useState<number | null>(null);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<number | undefined>(undefined);
-  useWakeLock(settings.keepAwake && !!workout);
-  // Your records BEFORE today, to spot new PRs as you tick sets.
+  useWakeLock(settings.keepAwake && !!workout && !isEdit);
+  // Your records BEFORE this workout, to spot new PRs as you tick sets.
+  // (When editing an old workout, only what came before it counts.)
   const exList = useExercises();
+  const beforeTs = isEdit ? workout?.finishedAt ?? Infinity : Infinity;
   const records = useMemo(
-    () => findPRs(workouts.filter((w) => w.id !== workout?.id), exList).records,
-    [workouts, exList, workout?.id],
+    () => findPRs(workouts.filter((w) => w.id !== workout?.id && (w.finishedAt ?? 0) < beforeTs), exList).records,
+    [workouts, exList, workout?.id, beforeTs],
   );
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
   const elapsed = useElapsed(workout?.startedAt);
@@ -53,8 +70,18 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
 
   const id = workout.id!;
   const template = templates.get(workout.templateId);
-  const last = lastPerformanceMap(workouts, id);
-  const prevNote = lastWorkoutNote(workouts.filter((w) => w.id !== id), workout.templateId);
+  const last = lastPerformanceMap(workouts, id, beforeTs);
+  const prevNote = lastWorkoutNote(workouts.filter((w) => w.id !== id), workout.templateId, beforeTs);
+  // Warm-ups: for the first weighted exercise, and for every barbell lift.
+  const firstWeighted = workout.entries.findIndex((e) => {
+    const ex = exercises.get(e.exerciseId);
+    return ex && ex.equipment !== 'bodyweight' && !ex.timed;
+  });
+  const warmupFor = (i: number, ex: Exercise, entry: WorkoutEntry): WarmupSet[] => {
+    if (isEdit || workout.deload || (i !== firstWeighted && ex.equipment !== 'barbell')) return [];
+    const work = Math.max(0, ...entry.sets.map((s) => s.weight));
+    return warmupSets(work, ex.equipment, settings.barWeight ?? 20, ex.equipment === 'barbell' ? 2.5 : ex.increment || 2.5);
+  };
 
   const updateEntry = (i: number, fn: (e: WorkoutEntry) => WorkoutEntry) =>
     mutateWorkout(id, (w) => ({ ...w, entries: w.entries.map((e, j) => (j === i ? fn(e) : e)) }));
@@ -74,7 +101,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
   const tick = (i: number, s: number) => {
     const set = workout.entries[i].sets[s];
     void updateSet(i, s, { done: !set.done });
-    if (!set.done) {
+    if (!set.done && !isEdit) {
       unlockAudio();
       celebrate(i, set);
       onStartRest(workout.entries[i].restSeconds, exercises.get(workout.entries[i].exerciseId)?.name ?? '');
@@ -96,6 +123,13 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
     onClose();
   };
 
+  // Leaving edit mode: an entry with nothing ticked is probably a mistake.
+  const done = async () => {
+    const any = workout.entries.some((e) => e.sets.some((s) => s.done));
+    if (!any && confirm('No sets are ticked, so this workout is empty. Delete it?')) await deleteWorkout(id);
+    onDone?.();
+  };
+
   const edit = editing && workout.entries[editing.entry];
   const editEx = edit ? exercises.get(edit.exerciseId) : undefined;
 
@@ -105,13 +139,35 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
         <div className="row spread">
           <div>
             <h3 style={{ color: template?.color }}>
-              {template?.name ?? 'Workout'} {workout.deload && <span className="chip">Deload</span>}
+              {isEdit ? 'Editing: ' : ''}{template?.name ?? 'Workout'} {workout.deload && <span className="chip">Deload</span>}
             </h3>
-            <div className="muted small">{formatNiceDate(workout.date)} · {elapsed}</div>
+            <div className="muted small">{formatNiceDate(workout.date)}{isEdit ? '' : ` · ${elapsed}`}</div>
           </div>
-          <button className="primary" onClick={finish}>Finish ✓</button>
+          {isEdit ? (
+            <button className="primary" onClick={done}>Done ✓</button>
+          ) : (
+            <button className="primary" onClick={finish}>Finish ✓</button>
+          )}
         </div>
       </div>
+
+      {isEdit && (
+        <div className="card">
+          <label className="field">
+            <span>Date</span>
+            <input
+              type="date"
+              value={workout.date}
+              max={todayStr()}
+              onChange={(e) => e.target.value && e.target.value <= todayStr() && setWorkoutDate(id, e.target.value)}
+            />
+          </label>
+          <p className="small muted" style={{ margin: '0 0 10px' }}>
+            Tap a set to change it, ✓ to count it. Only ticked sets are saved as done. Changes save instantly.
+          </p>
+          <button className="small" style={{ width: '100%' }} onClick={() => markAllSetsDone(id)}>✓ Tick all sets</button>
+        </div>
+      )}
 
       {prevNote && <div className="note-line" style={{ marginBottom: 10 }}>📝 Last time: {prevNote}</div>}
 
@@ -125,6 +181,8 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
             ex={ex}
             last={last.get(ex.id)}
             record={records.get(ex.id)}
+            warmup={warmupFor(i, ex, entry)}
+            barWeight={settings.barWeight ?? 20}
             deload={workout.deload}
             onTick={(s) => tick(i, s)}
             onEdit={(s) => setEditing({ entry: i, set: s })}
@@ -148,8 +206,14 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
         onSave={(note) => mutateWorkout(id, (w) => ({ ...w, note }))}
       />
       <div style={{ height: 16 }} />
-      <button className="primary big" onClick={finish}>Finish workout ✓</button>
-      <button className="danger ghost" style={{ width: '100%', marginTop: 10 }} onClick={discard}>Discard workout</button>
+      {isEdit ? (
+        <button className="primary big" onClick={done}>Done ✓</button>
+      ) : (
+        <>
+          <button className="primary big" onClick={finish}>Finish workout ✓</button>
+          <button className="danger ghost" style={{ width: '100%', marginTop: 10 }} onClick={discard}>Discard workout</button>
+        </>
+      )}
 
       {editing && edit && editEx && (
         <SetEditor
@@ -168,7 +232,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
                 return x;
               }),
             }));
-            if (andTick) {
+            if (andTick && !isEdit) {
               unlockAudio();
               celebrate(editing.entry, { ...edit.sets[k], ...patch });
               onStartRest(edit.restSeconds, editEx.name);
@@ -217,6 +281,8 @@ function ExerciseCard({
   ex,
   last,
   record,
+  warmup,
+  barWeight,
   deload,
   onTick,
   onEdit,
@@ -229,6 +295,8 @@ function ExerciseCard({
   ex: Exercise;
   last?: LastPerf;
   record?: PRRecord;
+  warmup: WarmupSet[];
+  barWeight: number;
   deload: boolean;
   onTick: (s: number) => void;
   onEdit: (s: number) => void;
@@ -265,6 +333,7 @@ function ExerciseCard({
       </div>
       {last?.note && <div className="note-line">📝 {last.note}</div>}
       {up !== null && <span className="badge-up">⬆ Add weight today: {up} kg (+{ex.increment})</span>}
+      {warmup.length > 0 && <Warmup sets={warmup} barbell={ex.equipment === 'barbell'} bar={barWeight} />}
 
       {entry.sets.map((s, k) => (
         <div key={k} className={'set-row' + (s.done ? ' done' : '') + (isSetPR(s, record) ? ' pr' : '')}>
@@ -417,6 +486,43 @@ function PlateView({ total, bar }: { total: number; bar: number }) {
           <b>{r.perSide.length ? `${r.perSide.join(' + ')} kg each side` : 'Empty bar'}</b>
           {r.remainder > 0 && <div className="small" style={{ color: 'var(--warn)' }}>+{r.remainder} kg per side can't be made with standard plates</div>}
         </>
+      )}
+    </div>
+  );
+}
+
+/** Collapsible warm-up suggestion. Tap a row to cross it off (not saved). */
+function Warmup({ sets, barbell, bar }: { sets: WarmupSet[]; barbell: boolean; bar: number }) {
+  const [open, setOpen] = useState(false);
+  const [crossed, setCrossed] = useState<Set<number>>(new Set());
+  return (
+    <div className="warmup">
+      <button className="small ghost warmup-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        🔥 Warm-up · {sets.length} sets {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <div>
+          {sets.map((w, i) => {
+            const plates = barbell ? platesPerSide(w.weight, bar) : null;
+            const label = barbell && w.weight === bar ? 'Empty bar' : `${w.weight} kg`;
+            return (
+              <button
+                key={i}
+                className={'warmup-row' + (crossed.has(i) ? ' crossed' : '')}
+                onClick={() => setCrossed((c) => {
+                  const n = new Set(c);
+                  if (n.has(i)) n.delete(i);
+                  else n.add(i);
+                  return n;
+                })}
+              >
+                <b>{label} × {w.reps}</b>
+                {plates && plates.perSide.length > 0 && <span className="muted small">{plates.perSide.join(' + ')} each side</span>}
+              </button>
+            );
+          })}
+          <div className="muted small">Light and easy - just to get warm. Not logged.</div>
+        </div>
       )}
     </div>
   );

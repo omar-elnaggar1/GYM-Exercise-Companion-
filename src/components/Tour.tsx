@@ -62,7 +62,7 @@ const STEPS: Step[] = [
     tab: 'workout',
     target: '.set-row',
     title: 'Logging a workout',
-    body: 'Sets are pre-filled from last time, so usually you just tap ✓. Tap the numbers to change weight or reps; for barbell lifts it also shows which plates to load on each side. Everything is saved instantly.',
+    body: 'Sets are pre-filled from last time, so usually you just tap ✓. Tap the numbers to change weight or reps; for barbell lifts it also shows which plates to load on each side. "🔥 Warm-up" suggests sets to ramp up before your first heavy lift. Everything is saved instantly.',
     onEnter: async ({ active, settings }) => {
       if (active || startedDemoWorkout) return;
       startedDemoWorkout = true;
@@ -95,7 +95,7 @@ const STEPS: Step[] = [
     tab: 'history',
     target: '.stat-grid',
     title: 'Calendar & streak',
-    body: 'The streak counts planned sessions in a row. Rest days never break it. The calendar is colored by session; tap a day to see what you did.',
+    body: 'The streak counts planned sessions in a row. Rest days never break it. The calendar is colored by session. Tap a workout to see or edit it, or use "+ Log a past workout" for a day you forgot to record.',
   },
   {
     tab: 'body',

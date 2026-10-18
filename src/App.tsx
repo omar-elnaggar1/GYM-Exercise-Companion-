@@ -31,6 +31,9 @@ export function App() {
   const [timer, setTimerState] = useState<TimerState | null>(loadTimer);
   // The workout you just finished, to show its summary on Today.
   const [summaryId, setSummaryId] = useState<number | null>(null);
+  // A finished workout being fixed from History.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const editingWorkout = editingId !== null ? workouts?.find((w) => w.id === editingId) : undefined;
 
   const setTimer = useCallback((t: TimerState | null) => {
     setTimerState(t);
@@ -97,7 +100,22 @@ export function App() {
             onGoToday={() => setTab('today')}
           />
         )}
-        {tab === 'history' && <HistoryScreen workouts={workouts} settings={settings} />}
+        {tab === 'history' && editingWorkout && (
+          <WorkoutScreen
+            mode="edit"
+            workout={editingWorkout}
+            settings={settings}
+            workouts={workouts}
+            onStartRest={() => {}}
+            onClose={() => setEditingId(null)}
+            onFinished={() => setEditingId(null)}
+            onGoToday={() => setEditingId(null)}
+            onDone={() => setEditingId(null)}
+          />
+        )}
+        {tab === 'history' && !editingWorkout && (
+          <HistoryScreen workouts={workouts} settings={settings} onEditWorkout={setEditingId} />
+        )}
         {tab === 'body' && <BodyScreen />}
         {tab === 'settings' && <SettingsScreen settings={settings} />}
       </div>
@@ -111,7 +129,10 @@ export function App() {
           <button
             key={t.id}
             className={(tab === t.id ? 'active' : '') + (t.id === 'workout' && active && tab !== t.id ? ' live' : '')}
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setEditingId(null);
+              setTab(t.id);
+            }}
           >
             <span className="ico">{t.ico}</span>
             {t.id === 'workout' && active ? 'Live ●' : t.label}
