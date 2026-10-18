@@ -33,6 +33,8 @@ export interface Template {
   name: string;
   color: string;
   items: TemplateItem[];
+  /** Deleted sessions are hidden but kept so old history still shows their name. */
+  archived?: boolean;
 }
 
 /** A rotation slot: a template id, or 'rest'. */

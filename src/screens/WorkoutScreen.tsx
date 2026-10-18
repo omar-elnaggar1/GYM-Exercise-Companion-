@@ -221,7 +221,7 @@ function ExerciseCard({
             {ex.perSide ? ' each side' : ''} · rest {entry.restSeconds}s · {doneCount}/{entry.sets.length} done
           </div>
         </div>
-        <button className="small" onClick={onSwap}>⇄ Swap</button>
+        <button className="small swap-btn" onClick={onSwap}>⇄ Swap</button>
       </div>
       <div className="small" style={{ marginTop: 6 }}>
         {last ? (

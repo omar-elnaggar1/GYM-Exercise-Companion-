@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import type { Settings, Workout } from '../db/types';
 import { byId, useExercises, useTemplates } from '../hooks';
-import { computeStreak } from '../logic/streak';
+import { computeStreak, toStreakWorkouts } from '../logic/streak';
 import { formatNiceDate, todayStr, toDateStr } from '../logic/dates';
 import { formatLast } from '../logic/progression';
 import { deleteWorkout } from '../db/actions';
@@ -23,7 +23,7 @@ export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; set
   const byDate = new Map<string, Workout[]>();
   for (const w of finished) byDate.set(w.date, [...(byDate.get(w.date) ?? []), w]);
 
-  const streak = computeStreak(finished, settings.rotation, today);
+  const streak = computeStreak(toStreakWorkouts(finished, settings.rotation), settings.rotation, today);
   const thisMonth = finished.filter((w) => w.date.startsWith(today.slice(0, 7))).length;
 
   // Calendar grid: weeks start on Monday.
@@ -80,7 +80,7 @@ export function HistoryScreen({ workouts, settings }: { workouts: Workout[]; set
           })}
         </div>
         <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
-          {[...templates.values()].map((t) => (
+          {[...templates.values()].filter((t) => !t.archived).map((t) => (
             <span key={t.id} className="row small" style={{ gap: 4 }}>
               <span className="dot" style={{ background: t.color }} />
               {t.name}

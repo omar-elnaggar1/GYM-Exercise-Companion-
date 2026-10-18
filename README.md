@@ -11,6 +11,8 @@ No account, no server: all your data stays on the phone itself.
 - **Swap exercises:** pick an alternative for today only or permanently. History is kept per exercise.
 - **Bodyweight log:** with a chart and 7-day average. **Calendar:** colored by session, with a streak counter. **Deload weeks:** suggested every 6–8 weeks. **Reminders.**
 - **Export / Import:** back up all your data to a file.
+- **Edit your training split:** reorder days, add or remove rest days, and create, rename or delete sessions.
+- **Tutorial:** a guided tour with sample data that runs on first launch and then disappears.
 
 ---
 
@@ -101,6 +103,23 @@ Turn them on in **Settings → Reminders**, choose a time, and tap **Allow** for
 
 ---
 
+## The tutorial 🎓
+
+The first time you open the app, an 11-step tour walks you through the Today screen, logging a workout, the rest timer, swaps and notes, the calendar and streak, bodyweight, and the split editor.
+
+- It runs on **sample data** (about 6 weeks of made-up workouts and weigh-ins), kept in a separate on-phone database. Your real data is never touched.
+- Tap **Finish** (or **Skip** at any point) and the sample data is deleted. The app reloads, empty and ready for you.
+- Replay it any time: **Settings → Help → Show the tutorial**.
+
+## Changing your training split
+
+**Settings → Edit training split**:
+- **Days:** use ▲ ▼ to reorder, ✕ to remove, and **+ Add a day** to add a session or a rest day. "▶ up next" shows which day the app will give you next.
+- **Sessions:** **+ New session** creates one (e.g. "Arms") with a name and calendar color, then takes you straight to adding its exercises. **Edit** renames or recolors a session, and **Delete** removes it from the split (past workouts stay in your history).
+- **Restore my original split** puts back Upper / Lower / Rest / Push / Pull / Legs / Rest.
+
+To change the exercises inside a session (sets, reps, rest time, weight jump), use **Exercises** on a session, or **Settings → Edit session exercises**.
+
 ## How the rotation works
 
 - A **training session waits for you**: if Push is next and you skip the gym for 3 days, it's still Push.
@@ -124,10 +143,11 @@ Turn them on in **Settings → Reminders**, choose a time, and tap **Allow** for
 ```
 src/
   db/          types.ts (data shapes), seed.ts (your program + alternatives),
-               db.ts (on-phone database), actions.ts (start/finish/swap/backup)
+               demo.ts (tutorial sample data), db.ts (on-phone database + tutorial mode),
+               actions.ts (start/finish/swap/backup/split editing)
   logic/       pure functions + tests: rotation, progression, streak, deload, reminders
-  screens/     Today, Workout, History, Body, Settings, TemplateEditor
-  components/  RestTimer, Stepper, Sheet, NoteField, WeightChart
+  screens/     Today, Workout, History, Body, Settings, SplitEditor, TemplateEditor
+  components/  RestTimer, Stepper, Sheet, NoteField, WeightChart, Tour (tutorial)
 .github/workflows/deploy.yml   auto-publish to GitHub Pages
 ```
 

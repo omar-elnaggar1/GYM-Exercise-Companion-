@@ -1,7 +1,7 @@
 // Settings: rotation, templates, timer, reminders, deload and backups.
 import { useRef, useState } from 'react';
 import type { Settings } from '../db/types';
-import { updateSettings } from '../db/db';
+import { isTutorial, startTutorial, updateSettings } from '../db/db';
 import { byId, useTemplates } from '../hooks';
 import { todayStatus } from '../logic/rotation';
 import { acceptDeload, deloadStatus } from '../logic/deload';
@@ -9,6 +9,7 @@ import { todayStr } from '../logic/dates';
 import { notificationsSupported, showNotification } from '../logic/reminders';
 import { exportAll, importAll } from '../db/actions';
 import { TemplateEditor } from './TemplateEditor';
+import { SplitEditor } from './SplitEditor';
 
 function Toggle({ label, on, onChange, hint }: { label: string; on: boolean; onChange: (v: boolean) => void; hint?: string }) {
   return (
@@ -25,14 +26,18 @@ function Toggle({ label, on, onChange, hint }: { label: string; on: boolean; onC
 }
 
 export function SettingsScreen({ settings }: { settings: Settings }) {
-  const [editing, setEditing] = useState(false);
+  // Sub-pages: the split editor and the per-session exercise editor.
+  const [page, setPage] = useState<'main' | 'split' | { templateId?: string; from: 'main' | 'split' }>('main');
   const templates = byId(useTemplates());
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState('');
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const today = todayStr();
 
-  if (editing) return <TemplateEditor onBack={() => setEditing(false)} />;
+  if (page === 'split') {
+    return <SplitEditor settings={settings} onBack={() => setPage('main')} onEditExercises={(id) => setPage({ templateId: id, from: 'split' })} />;
+  }
+  if (page !== 'main') return <TemplateEditor initialId={page.templateId} onBack={() => setPage(page.from)} />;
 
   const status = todayStatus(settings.rotationState, settings.rotation, today);
   const deload = deloadStatus(settings, today);
@@ -94,7 +99,9 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
             ))}
           </select>
         </label>
-        <button className="big" onClick={() => setEditing(true)}>Edit templates ›</button>
+        <button className="big split-btn" onClick={() => setPage('split')}>Edit training split ›</button>
+        <div style={{ height: 8 }} />
+        <button className="big" onClick={() => setPage({ from: 'main' })}>Edit session exercises ›</button>
       </div>
 
       <h2>Rest timer</h2>
@@ -102,7 +109,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
         <Toggle label="Sound" on={settings.timerSound} onChange={(v) => updateSettings({ timerSound: v })} />
         <Toggle label="Vibrate" hint="Android only - iPhones don't allow it" on={settings.timerVibrate} onChange={(v) => updateSettings({ timerVibrate: v })} />
         <Toggle label="Keep screen on during workout" hint="So the timer stays visible" on={settings.keepAwake} onChange={(v) => updateSettings({ keepAwake: v })} />
-        <p className="muted small">Rest time per exercise is set in Edit templates (default 150 s for the first exercise, 90 s for the rest).</p>
+        <p className="muted small">Rest time per exercise is set in Edit session exercises (default 150 s for the first exercise, 90 s for the rest).</p>
       </div>
 
       <h2>Reminders</h2>
@@ -169,7 +176,14 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
           }}
         />
       </div>
-      <p className="muted small center">Gym Companion · works offline · v1.0</p>
+      <h2>Help</h2>
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          A quick tour of the app using sample data. Your real data is not touched, and the sample data is deleted when the tour ends.
+        </p>
+        <button className="big" disabled={isTutorial} onClick={startTutorial}>🎓 Show the tutorial</button>
+      </div>
+      <p className="muted small center">Gym Companion · works offline · v1.1</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 // Everything that changes data lives here, so screens stay simple.
 import { db, getSettings, updateSettings } from './db';
-import type { Exercise, LoggedSet, Workout, WorkoutEntry } from './types';
+import type { Exercise, LoggedSet, Slot, Template, Workout, WorkoutEntry } from './types';
+import { DEFAULT_ROTATION, buildTemplates } from './seed';
 import { advanceAfterWorkout, findSlotFor, resolveRotation } from '../logic/rotation';
 import { prefillSets } from '../logic/progression';
 import { todayStr } from '../logic/dates';
@@ -198,4 +199,57 @@ export async function mutateWorkout(id: number, fn: (w: Workout) => Workout): Pr
     const cur = await db.workouts.get(id);
     if (cur) await db.workouts.put(fn(cur));
   });
+}
+
+// ---------- Training split ----------
+
+/**
+ * Save a new rotation. `nextIndex` = which slot is up next afterwards
+ * (the editor works this out so "next session" follows the slot you moved).
+ */
+export async function saveRotation(rotation: Slot[], nextIndex: number): Promise<void> {
+  if (!rotation.some((s) => s !== 'rest')) throw new Error('Your split needs at least one training day.');
+  const settings = await getSettings();
+  const today = todayStr();
+  const cur = resolveRotation(settings.rotationState, settings.rotation, today);
+  const index = Math.min(Math.max(nextIndex, 0), rotation.length - 1);
+  // Keep "done for today" if it was; otherwise the next slot is due today.
+  const since = cur.since > today ? cur.since : today;
+  await updateSettings({ rotation, rotationState: { index, since } });
+}
+
+export async function createTemplate(name: string, color: string): Promise<string> {
+  const id = 'custom-' + Date.now().toString(36);
+  await db.templates.add({ id, name, color, items: [] });
+  return id;
+}
+
+export async function updateTemplate(id: string, patch: Partial<Template>): Promise<void> {
+  await db.templates.update(id, patch);
+}
+
+/** Delete a session: hide it and take it out of the rotation. History keeps its name. */
+export async function archiveTemplate(id: string): Promise<void> {
+  const settings = await getSettings();
+  const cur = resolveRotation(settings.rotationState, settings.rotation, todayStr());
+  const rotation: Slot[] = [];
+  let next = 0;
+  settings.rotation.forEach((s, i) => {
+    if (i === cur.index) next = rotation.length;
+    if (s !== id) rotation.push(s);
+  });
+  if (!rotation.some((s) => s !== 'rest')) throw new Error("You can't delete your only training session.");
+  await db.templates.update(id, { archived: true });
+  await saveRotation(rotation, next % rotation.length);
+}
+
+/** Put back the original Upper/Lower/Rest/Push/Pull/Legs/Rest split. */
+export async function restoreDefaultSplit(): Promise<void> {
+  const defaults = buildTemplates();
+  for (const t of defaults) {
+    const existing = await db.templates.get(t.id);
+    if (!existing) await db.templates.add(t);
+    else if (existing.archived) await db.templates.update(t.id, { archived: false });
+  }
+  await saveRotation([...DEFAULT_ROTATION], 0);
 }

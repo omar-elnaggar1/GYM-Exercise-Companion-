@@ -1,4 +1,4 @@
-// Edit the 5 session templates: add / remove / reorder exercises,
+// Edit each session's exercises: add / remove / reorder exercises,
 // change sets, rep ranges, rest time and weight increment.
 import { useState, type ReactNode } from 'react';
 import type { Equipment, Exercise, TemplateItem } from '../db/types';
@@ -9,10 +9,10 @@ import { DEFAULT_INCREMENT } from '../db/seed';
 import { Stepper } from '../components/Stepper';
 import { Sheet } from '../components/Sheet';
 
-export function TemplateEditor({ onBack }: { onBack: () => void }) {
-  const templates = useTemplates();
+export function TemplateEditor({ onBack, initialId }: { onBack: () => void; initialId?: string }) {
+  const templates = useTemplates().filter((x) => !x.archived);
   const exercises = byId(useExercises());
-  const [tid, setTid] = useState('upper');
+  const [tid, setTid] = useState(initialId ?? 'upper');
   const [adding, setAdding] = useState(false);
   const t = templates.find((x) => x.id === tid) ?? templates[0];
   if (!t) return null;
@@ -29,14 +29,15 @@ export function TemplateEditor({ onBack }: { onBack: () => void }) {
 
   return (
     <div>
-      <button className="ghost small" onClick={onBack}>← Settings</button>
-      <h1>Templates</h1>
+      <button className="ghost small" onClick={onBack}>← Back</button>
+      <h1>Session exercises</h1>
       <div className="tabs">
         {templates.map((x) => (
           <button key={x.id} className={x.id === t.id ? 'active' : ''} onClick={() => setTid(x.id)}>{x.name}</button>
         ))}
       </div>
       <p className="muted small">Changes are saved instantly and apply from your next workout.</p>
+      {t.items.length === 0 && <p className="muted">No exercises yet - tap “+ Add exercise”.</p>}
 
       {t.items.map((item, i) => {
         const ex = exercises.get(item.exerciseId);

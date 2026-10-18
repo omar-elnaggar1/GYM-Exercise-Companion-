@@ -42,7 +42,7 @@ export function TodayScreen({
     onGoWorkout();
   };
 
-  const slotName = (s: Slot) => (s === 'rest' ? 'Rest' : tMap.get(s)?.name ?? s);
+  const slotName = (s: Slot) => (s === 'rest' ? 'Rest' : tMap.get(s)?.name ?? '…');
   const prevNote = template ? lastWorkoutNote(workouts, template.id) : '';
 
   return (
@@ -155,7 +155,7 @@ export function TodayScreen({
 
       {picking && (
         <Sheet title="Pick a session" onClose={() => setPicking(false)}>
-          {templates.map((t) => (
+          {templates.filter((t) => !t.archived).map((t) => (
             <button key={t.id} className="list-btn" onClick={() => start(t)}>
               <span className="row">
                 <span className="dot" style={{ background: t.color }} />

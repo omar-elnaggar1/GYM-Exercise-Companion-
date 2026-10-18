@@ -45,3 +45,18 @@ export function computeStreak(workouts: StreakWorkout[], rotation: Slot[], today
   if (idleSince > restDaysAfter(rotation, last.slotIndex)) return 0;
   return streak;
 }
+
+/**
+ * Which rotation slot each workout counts for. If the split was edited since,
+ * the stored slot may now hold a different session, so fall back to the
+ * first slot with that session (or -1 = doesn't count).
+ */
+export function toStreakWorkouts(
+  workouts: { date: string; slotIndex: number; templateId: string }[],
+  rotation: Slot[],
+): StreakWorkout[] {
+  return workouts.map((w) => ({
+    date: w.date,
+    slotIndex: rotation[w.slotIndex] === w.templateId ? w.slotIndex : rotation.indexOf(w.templateId),
+  }));
+}

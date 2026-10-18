@@ -8,6 +8,8 @@ import { BodyScreen } from './screens/BodyScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { RestTimer, loadTimer, saveTimer, type TimerState } from './components/RestTimer';
 import { useReminderChecker } from './useReminders';
+import { Tour } from './components/Tour';
+import { isTutorial } from './db/db';
 
 export type Tab = 'today' | 'workout' | 'history' | 'body' | 'settings';
 
@@ -51,7 +53,16 @@ export function App() {
   const timerOn = !!timer && !!settings;
   return (
     <>
-      <div className={'screen' + (timerOn ? ' with-timer' : '')}>
+      {isTutorial && (
+        <Tour
+          settings={settings}
+          active={active}
+          setTab={setTab}
+          startTimer={(seconds) => setTimer({ endsAt: Date.now() + seconds * 1000, total: seconds, label: 'Tutorial' })}
+          stopTimer={() => setTimer(null)}
+        />
+      )}
+      <div className={'screen' + (timerOn ? ' with-timer' : '') + (isTutorial ? ' with-tour' : '')}>
         {tab === 'today' && <TodayScreen settings={settings} workouts={workouts} active={active} onGoWorkout={() => setTab('workout')} />}
         {tab === 'workout' && (
           <WorkoutScreen
