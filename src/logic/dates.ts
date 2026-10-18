@@ -34,3 +34,9 @@ export function formatNiceDate(s: string): string {
     month: 'short',
   });
 }
+
+/** "12 Oct" */
+export function formatShortDate(s: string): string {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}

@@ -1,5 +1,5 @@
 // The workout logger. Every tap is saved to the phone immediately.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Exercise, LoggedSet, Settings, Workout, WorkoutEntry } from '../db/types';
 import { byId, useExercises, useTemplates } from '../hooks';
 import { deleteWorkout, finishWorkout, lastPerformanceMap, lastWorkoutNote, mutateWorkout, swapExercise, type LastPerf } from '../db/actions';
@@ -7,6 +7,8 @@ import { fmtKg, formatLast, suggestProgression } from '../logic/progression';
 import { formatNiceDate } from '../logic/dates';
 import { unlockAudio } from '../logic/alerts';
 import { useWakeLock } from '../useWakeLock';
+import { findPRs, fmtSet, isSetPR, type PRRecord } from '../logic/progress';
+import { PLATE_COLOR, platesPerSide } from '../logic/plates';
 import { Sheet } from '../components/Sheet';
 import { Stepper } from '../components/Stepper';
 import { NoteField } from '../components/NoteField';
@@ -17,15 +19,26 @@ interface Props {
   workouts: Workout[];
   onStartRest: (seconds: number, label: string) => void;
   onClose: () => void;
+  /** Called with the workout id after Finish (to show the summary). */
+  onFinished: (id: number) => void;
   onGoToday: () => void;
 }
 
-export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClose, onGoToday }: Props) {
+export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClose, onFinished, onGoToday }: Props) {
   const exercises = byId(useExercises());
   const templates = byId(useTemplates());
   const [editing, setEditing] = useState<{ entry: number; set: number } | null>(null);
   const [swapping, setSwapping] = useState<number | null>(null);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<number | undefined>(undefined);
   useWakeLock(settings.keepAwake && !!workout);
+  // Your records BEFORE today, to spot new PRs as you tick sets.
+  const exList = useExercises();
+  const records = useMemo(
+    () => findPRs(workouts.filter((w) => w.id !== workout?.id), exList).records,
+    [workouts, exList, workout?.id],
+  );
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
   const elapsed = useElapsed(workout?.startedAt);
 
   if (!workout) {
@@ -48,11 +61,22 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
   const updateSet = (i: number, s: number, patch: Partial<LoggedSet>) =>
     updateEntry(i, (e) => ({ ...e, sets: e.sets.map((x, k) => (k === s ? { ...x, ...patch } : x)) }));
 
+  const celebrate = (i: number, set: LoggedSet) => {
+    const exId = workout.entries[i].exerciseId;
+    const rec = records.get(exId);
+    if (!isSetPR({ ...set, done: true }, rec)) return;
+    navigator.vibrate?.([80, 60, 80]);
+    setToast(`🏆 New PR! ${exercises.get(exId)?.name}: ${fmtSet(set, rec!.metric)}`);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(''), 3500);
+  };
+
   const tick = (i: number, s: number) => {
     const set = workout.entries[i].sets[s];
     void updateSet(i, s, { done: !set.done });
     if (!set.done) {
       unlockAudio();
+      celebrate(i, set);
       onStartRest(workout.entries[i].restSeconds, exercises.get(workout.entries[i].exerciseId)?.name ?? '');
     }
   };
@@ -63,7 +87,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
     if (!doneAny && !confirm('No sets ticked. Finish anyway?')) return;
     if (doneAny && open > 0 && !confirm(`${open} set${open === 1 ? '' : 's'} not ticked. Finish anyway? (Unticked sets are not counted.)`)) return;
     await finishWorkout(workout);
-    onClose();
+    onFinished(id);
   };
 
   const discard = async () => {
@@ -100,6 +124,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
             entry={entry}
             ex={ex}
             last={last.get(ex.id)}
+            record={records.get(ex.id)}
             deload={workout.deload}
             onTick={(s) => tick(i, s)}
             onEdit={(s) => setEditing({ entry: i, set: s })}
@@ -129,6 +154,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
       {editing && edit && editEx && (
         <SetEditor
           ex={editEx}
+          barWeight={settings.barWeight ?? 20}
           set={edit.sets[editing.set]}
           index={editing.set}
           onSave={(patch, andTick) => {
@@ -144,6 +170,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
             }));
             if (andTick) {
               unlockAudio();
+              celebrate(editing.entry, { ...edit.sets[k], ...patch });
               onStartRest(edit.restSeconds, editEx.name);
             }
             setEditing(null);
@@ -155,6 +182,8 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
           onClose={() => setEditing(null)}
         />
       )}
+
+      {toast && <div className="toast" role="status">{toast}</div>}
 
       {swapping !== null && (
         <SwapSheet
@@ -187,6 +216,7 @@ function ExerciseCard({
   entry,
   ex,
   last,
+  record,
   deload,
   onTick,
   onEdit,
@@ -198,6 +228,7 @@ function ExerciseCard({
   entry: WorkoutEntry;
   ex: Exercise;
   last?: LastPerf;
+  record?: PRRecord;
   deload: boolean;
   onTick: (s: number) => void;
   onEdit: (s: number) => void;
@@ -236,7 +267,7 @@ function ExerciseCard({
       {up !== null && <span className="badge-up">⬆ Add weight today: {up} kg (+{ex.increment})</span>}
 
       {entry.sets.map((s, k) => (
-        <div key={k} className={'set-row' + (s.done ? ' done' : '')}>
+        <div key={k} className={'set-row' + (s.done ? ' done' : '') + (isSetPR(s, record) ? ' pr' : '')}>
           <span className="num">{k + 1}</span>
           <button className="val" onClick={() => onEdit(k)} aria-label={`Edit set ${k + 1}`}>
             {ex.timed ? (
@@ -251,6 +282,7 @@ function ExerciseCard({
                 {s.reps}
               </>
             )}
+            {isSetPR(s, record) && <span className="pr-tag" aria-label="Personal record">🏆</span>}
           </button>
           <button className="tick" onClick={() => onTick(k)} aria-label={s.done ? 'Untick set' : 'Tick set'}>
             ✓
@@ -274,6 +306,7 @@ function ExerciseCard({
 
 function SetEditor({
   ex,
+  barWeight,
   set,
   index,
   onSave,
@@ -281,6 +314,7 @@ function SetEditor({
   onClose,
 }: {
   ex: Exercise;
+  barWeight: number;
   set: LoggedSet;
   index: number;
   onSave: (patch: Partial<LoggedSet>, andTick: boolean) => void;
@@ -295,6 +329,7 @@ function SetEditor({
         <span>Weight (kg){ex.equipment === 'bodyweight' ? ' - extra weight, 0 = bodyweight' : ''}</span>
         <Stepper value={weight} onChange={setWeight} step={ex.increment || 1} label="weight" />
       </label>
+      {ex.equipment === 'barbell' && weight > 0 && <PlateView total={weight} bar={barWeight} />}
       <label className="field">
         <span>{ex.timed ? 'Seconds' : 'Reps'}</span>
         <Stepper value={reps} onChange={(v) => setReps(Math.round(v))} step={ex.timed ? 5 : 1} label={ex.timed ? 'seconds' : 'reps'} />
@@ -354,5 +389,35 @@ function SwapSheet({
         );
       })}
     </Sheet>
+  );
+}
+
+/** Shows which plates to load on each side of the bar. */
+function PlateView({ total, bar }: { total: number; bar: number }) {
+  const r = platesPerSide(total, bar);
+  return (
+    <div className="card" style={{ background: 'var(--card-2)', marginTop: -4 }}>
+      <div className="small muted">Plates per side ({bar} kg bar)</div>
+      {!r ? (
+        <div className="small">Lighter than the bar.</div>
+      ) : (
+        <>
+          <div className="plates" aria-hidden="true">
+            <span className="bar" />
+            {r.perSide.map((p, i) => (
+              <span
+                key={i}
+                className="plate"
+                style={{ height: 30 + p * 1.4, background: PLATE_COLOR[p], color: p === 5 || p === 15 ? '#111' : '#fff' }}
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+          <b>{r.perSide.length ? `${r.perSide.join(' + ')} kg each side` : 'Empty bar'}</b>
+          {r.remainder > 0 && <div className="small" style={{ color: 'var(--warn)' }}>+{r.remainder} kg per side can't be made with standard plates</div>}
+        </>
+      )}
+    </div>
   );
 }

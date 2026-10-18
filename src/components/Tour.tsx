@@ -42,6 +42,12 @@ const STEPS: Step[] = [
   },
   {
     tab: 'today',
+    target: '.streak-chip',
+    title: 'Your streak 🔥',
+    body: 'How many planned sessions in a row you have done. Rest days never break it. Tap it to open your calendar.',
+  },
+  {
+    tab: 'today',
     target: '.banner.warn',
     title: 'Deload weeks',
     body: 'Every 6 weeks (you can change it) the app suggests an easier week: about half the sets at about 90% of the weight. You can accept or skip it.',
@@ -56,7 +62,7 @@ const STEPS: Step[] = [
     tab: 'workout',
     target: '.set-row',
     title: 'Logging a workout',
-    body: 'Sets are pre-filled from last time, so usually you just tap ✓. Tap the numbers to change weight or reps. Everything is saved instantly.',
+    body: 'Sets are pre-filled from last time, so usually you just tap ✓. Tap the numbers to change weight or reps; for barbell lifts it also shows which plates to load on each side. Everything is saved instantly.',
     onEnter: async ({ active, settings }) => {
       if (active || startedDemoWorkout) return;
       startedDemoWorkout = true;
@@ -78,6 +84,12 @@ const STEPS: Step[] = [
     title: 'Swap & notes',
     body: 'Machine taken? "Swap" offers alternatives for the same muscle, for today only or permanently. Use 📝 Note for things like "shoulder felt off". You\'ll see it next time.',
     onEnter: ({ stopTimer }) => stopTimer(),
+  },
+  {
+    tab: 'progress',
+    target: '.stat-tiles',
+    title: 'Progress & PRs 🏆',
+    body: 'See your strength over time per exercise, your personal records, your biggest improvements and weekly volume. Beat a record mid-workout and the set lights up with a 🏆 straight away.',
   },
   {
     tab: 'history',

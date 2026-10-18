@@ -98,4 +98,6 @@ export interface Settings {
   keepAwake: boolean;
   timerSound: boolean;
   timerVibrate: boolean;
+  /** Empty barbell weight for the plate calculator (default 20). */
+  barWeight?: number;
 }

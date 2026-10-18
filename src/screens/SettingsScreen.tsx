@@ -112,6 +112,16 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
         <p className="muted small">Rest time per exercise is set in Edit session exercises (default 150 s for the first exercise, 90 s for the rest).</p>
       </div>
 
+      <h2>Plate calculator</h2>
+      <div className="card">
+        <label className="field" style={{ marginBottom: 0 }}>
+          <span>Barbell weight (shown when you edit a barbell set)</span>
+          <select value={settings.barWeight ?? 20} onChange={(e) => updateSettings({ barWeight: Number(e.target.value) })}>
+            {[20, 15, 10, 7.5, 5].map((n) => <option key={n} value={n}>{n} kg{n === 20 ? ' (standard Olympic bar)' : n === 15 ? ' (women’s bar)' : ''}</option>)}
+          </select>
+        </label>
+      </div>
+
       <h2>Reminders</h2>
       <div className="card">
         <Toggle label="Remind me on training days" on={settings.reminderEnabled} onChange={(v) => updateSettings({ reminderEnabled: v })} />

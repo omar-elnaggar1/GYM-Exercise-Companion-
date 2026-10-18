@@ -9,6 +9,9 @@ import { formatLast, suggestProgression } from '../logic/progression';
 import { lastPerformanceMap, lastWorkoutNote, startWorkout } from '../db/actions';
 import { updateSettings } from '../db/db';
 import { reminderDue } from '../useReminders';
+import { computeStreak, toStreakWorkouts } from '../logic/streak';
+import { findPRs, fmtSet, fmtVolume, workoutVolume } from '../logic/progress';
+import type { Tab } from '../App';
 import { Sheet } from '../components/Sheet';
 
 export function TodayScreen({
@@ -16,11 +19,17 @@ export function TodayScreen({
   workouts,
   active,
   onGoWorkout,
+  onGoTab,
+  summaryId,
+  onDismissSummary,
 }: {
   settings: Settings;
   workouts: Workout[];
   active: Workout | null;
   onGoWorkout: () => void;
+  onGoTab: (t: Tab) => void;
+  summaryId: number | null;
+  onDismissSummary: () => void;
 }) {
   const templates = useTemplates();
   const exercises = byId(useExercises());
@@ -44,10 +53,36 @@ export function TodayScreen({
 
   const slotName = (s: Slot) => (s === 'rest' ? 'Rest' : tMap.get(s)?.name ?? '…');
   const prevNote = template ? lastWorkoutNote(workouts, template.id) : '';
+  const finished = workouts.filter((w) => w.finishedAt);
+  const streak = computeStreak(toStreakWorkouts(finished, rot), rot, today);
+  const summary = summaryId !== null ? finished.find((w) => w.id === summaryId) : undefined;
 
   return (
     <div>
-      <div className="muted">{formatNiceDate(today)}</div>
+      <div className="row spread">
+        <span className="muted">{formatNiceDate(today)}</span>
+        <button
+          className={'chip streak-chip' + (streak === 0 ? ' cold' : '')}
+          onClick={() => onGoTab('history')}
+          aria-label={`Streak: ${streak} sessions`}
+        >
+          🔥 {streak}
+        </button>
+      </div>
+
+      {summary && (
+        <WorkoutSummary
+          workout={summary}
+          workouts={finished}
+          name={tMap.get(summary.templateId)?.name ?? 'Workout'}
+          streak={streak}
+          onClose={onDismissSummary}
+          onProgress={() => {
+            onDismissSummary();
+            onGoTab('progress');
+          }}
+        />
+      )}
 
       {status.kind === 'train' && template && (
         <div className="hero-title">
@@ -166,6 +201,72 @@ export function TodayScreen({
           ))}
         </Sheet>
       )}
+    </div>
+  );
+}
+
+/** Shown right after you finish: duration, sets, volume, PRs. */
+function WorkoutSummary({
+  workout,
+  workouts,
+  name,
+  streak,
+  onClose,
+  onProgress,
+}: {
+  workout: Workout;
+  workouts: Workout[];
+  name: string;
+  streak: number;
+  onClose: () => void;
+  onProgress: () => void;
+}) {
+  const exercises = byId(useExercises());
+  const { events, records } = findPRs(workouts, [...exercises.values()]);
+  const prs = events.filter((e) => e.workoutId === workout.id);
+  const minutes = Math.max(1, Math.round(((workout.finishedAt ?? 0) - workout.startedAt) / 60_000));
+  const sets = workout.entries.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
+  const volume = workoutVolume(workout);
+  // Compare with the previous time you did this session.
+  const prev = workouts
+    .filter((w) => w.templateId === workout.templateId && (w.finishedAt ?? 0) < (workout.finishedAt ?? 0))
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0];
+  const prevVol = prev ? workoutVolume(prev) : 0;
+  const delta = prevVol > 0 ? Math.round(((volume - prevVol) / prevVol) * 100) : null;
+  const baseline = !workouts.some((w) => (w.finishedAt ?? 0) < (workout.finishedAt ?? 0));
+
+  return (
+    <div className="card" style={{ borderColor: 'var(--accent)', marginTop: 12 }}>
+      <div className="row spread">
+        <h3>🎉 {name} done!</h3>
+        <button className="icon small ghost" onClick={onClose} aria-label="Close summary">✕</button>
+      </div>
+      <div className="summary-grid">
+        <div><div className="n">{minutes}</div><div className="muted small">min</div></div>
+        <div><div className="n">{sets}</div><div className="muted small">sets</div></div>
+        <div><div className="n">{fmtVolume(volume)}</div><div className="muted small">lifted</div></div>
+      </div>
+      {delta !== null && (
+        <p className="small" style={{ margin: '0 0 8px' }}>
+          {delta >= 0 ? '📈' : '📉'} {delta >= 0 ? '+' : ''}{delta}% volume vs your last {name}
+        </p>
+      )}
+      {prs.length > 0 ? (
+        <div className="small">
+          <b>🏆 {prs.length} new PR{prs.length === 1 ? '' : 's'}:</b>
+          {prs.map((e, i) => (
+            <div key={i}>• {exercises.get(e.exerciseId)?.name}: {fmtSet(e.set, records.get(e.exerciseId)?.metric ?? 'e1rm')}</div>
+          ))}
+        </div>
+      ) : (
+        <p className="small muted" style={{ margin: 0 }}>
+          {baseline
+            ? 'First session logged. This is your starting point; records start counting from next time.'
+            : 'No new records this time. Consistency is what builds them. 💪'}
+        </p>
+      )}
+      {streak > 1 && <p className="small" style={{ margin: '8px 0 0' }}>🔥 {streak} sessions in a row. Keep it going!</p>}
+      <button className="small" style={{ width: '100%', marginTop: 10 }} onClick={onProgress}>See your progress ›</button>
     </div>
   );
 }

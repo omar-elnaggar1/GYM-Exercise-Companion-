@@ -6,16 +6,18 @@ import { WorkoutScreen } from './screens/WorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { BodyScreen } from './screens/BodyScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { ProgressScreen } from './screens/ProgressScreen';
 import { RestTimer, loadTimer, saveTimer, type TimerState } from './components/RestTimer';
 import { useReminderChecker } from './useReminders';
 import { Tour } from './components/Tour';
 import { isTutorial } from './db/db';
 
-export type Tab = 'today' | 'workout' | 'history' | 'body' | 'settings';
+export type Tab = 'today' | 'workout' | 'progress' | 'history' | 'body' | 'settings';
 
 const TABS: { id: Tab; label: string; ico: string }[] = [
   { id: 'today', label: 'Today', ico: '🏠' },
   { id: 'workout', label: 'Workout', ico: '🏋️' },
+  { id: 'progress', label: 'Progress', ico: '📈' },
   { id: 'history', label: 'History', ico: '📅' },
   { id: 'body', label: 'Body', ico: '⚖️' },
   { id: 'settings', label: 'Settings', ico: '⚙️' },
@@ -27,6 +29,8 @@ export function App() {
   const workouts = useWorkouts();
   const [tab, setTab] = useState<Tab>('today');
   const [timer, setTimerState] = useState<TimerState | null>(loadTimer);
+  // The workout you just finished, to show its summary on Today.
+  const [summaryId, setSummaryId] = useState<number | null>(null);
 
   const setTimer = useCallback((t: TimerState | null) => {
     setTimerState(t);
@@ -63,7 +67,18 @@ export function App() {
         />
       )}
       <div className={'screen' + (timerOn ? ' with-timer' : '') + (isTutorial ? ' with-tour' : '')}>
-        {tab === 'today' && <TodayScreen settings={settings} workouts={workouts} active={active} onGoWorkout={() => setTab('workout')} />}
+        {tab === 'today' && (
+          <TodayScreen
+            settings={settings}
+            workouts={workouts}
+            active={active}
+            onGoWorkout={() => setTab('workout')}
+            onGoTab={setTab}
+            summaryId={summaryId}
+            onDismissSummary={() => setSummaryId(null)}
+          />
+        )}
+        {tab === 'progress' && <ProgressScreen workouts={workouts} />}
         {tab === 'workout' && (
           <WorkoutScreen
             workout={active}
@@ -72,6 +87,11 @@ export function App() {
             onStartRest={(seconds, label) => setTimer({ endsAt: Date.now() + seconds * 1000, total: seconds, label })}
             onClose={() => {
               setTimer(null);
+              setTab('today');
+            }}
+            onFinished={(id) => {
+              setTimer(null);
+              setSummaryId(id);
               setTab('today');
             }}
             onGoToday={() => setTab('today')}

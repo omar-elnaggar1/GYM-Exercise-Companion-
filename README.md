@@ -13,6 +13,11 @@ No account, no server: all your data stays on the phone itself.
 - **Export / Import:** back up all your data to a file.
 - **Edit your training split:** reorder days, add or remove rest days, and create, rename or delete sessions.
 - **Tutorial:** a guided tour with sample data that runs on first launch and then disappears.
+- **Progress tab:** strength over time per exercise (estimated 1-rep max), personal records, biggest improvements and weekly volume.
+- **Live PRs:** beat a record mid-workout and the set lights up 🏆 straight away.
+- **Plate calculator:** editing a barbell set shows exactly which plates to load on each side.
+- **Workout summary:** after Finish you see duration, sets, volume, new PRs and how it compares with last time.
+- **Streak icon 🔥** at the top of the Today screen.
 
 ---
 
@@ -105,7 +110,7 @@ Turn them on in **Settings → Reminders**, choose a time, and tap **Allow** for
 
 ## The tutorial 🎓
 
-The first time you open the app, an 11-step tour walks you through the Today screen, logging a workout, the rest timer, swaps and notes, the calendar and streak, bodyweight, and the split editor.
+The first time you open the app, a 13-step tour walks you through the Today screen, logging a workout, the rest timer, swaps and notes, the calendar and streak, bodyweight, and the split editor.
 
 - It runs on **sample data** (about 6 weeks of made-up workouts and weigh-ins), kept in a separate on-phone database. Your real data is never touched.
 - Tap **Finish** (or **Skip** at any point) and the sample data is deleted. The app reloads, empty and ready for you.
@@ -119,6 +124,14 @@ The first time you open the app, an 11-step tour walks you through the Today scr
 - **Restore my original split** puts back Upper / Lower / Rest / Push / Pull / Legs / Rest.
 
 To change the exercises inside a session (sets, reps, rest time, weight jump), use **Exercises** on a session, or **Settings → Edit session exercises**.
+
+## Progress & personal records 📈
+
+- **Estimated 1-rep max (e1RM)** is how the app compares sets with different weights and reps. It uses the Epley formula, so 60 kg × 10 ≈ 80 kg. The chart shows your best e1RM each session, which means you can see progress even when you add reps rather than weight.
+- **Bodyweight moves** (pull-ups, dips…) are tracked by reps until you add weight. **Timed holds** (plank) are tracked by seconds.
+- **A PR is counted** when you beat your best e1RM or lift a heavier weight than ever. Your first session of an exercise is the baseline, and deload weeks are ignored.
+- Tap any exercise in "Recent PRs", "Biggest improvements" or "All personal records" to see its chart. Tap the chart to read any session.
+- **Plate calculator:** set your bar weight in **Settings → Plate calculator** (default 20 kg).
 
 ## How the rotation works
 
@@ -145,9 +158,10 @@ src/
   db/          types.ts (data shapes), seed.ts (your program + alternatives),
                demo.ts (tutorial sample data), db.ts (on-phone database + tutorial mode),
                actions.ts (start/finish/swap/backup/split editing)
-  logic/       pure functions + tests: rotation, progression, streak, deload, reminders
-  screens/     Today, Workout, History, Body, Settings, SplitEditor, TemplateEditor
-  components/  RestTimer, Stepper, Sheet, NoteField, WeightChart, Tour (tutorial)
+  logic/       pure functions + tests: rotation, progression, streak, deload, reminders,
+               progress (e1RM, PRs, volume), plates
+  screens/     Today, Workout, Progress, History, Body, Settings, SplitEditor, TemplateEditor
+  components/  RestTimer, Stepper, Sheet, NoteField, WeightChart, LineChart, BarChart, Tour (tutorial)
 .github/workflows/deploy.yml   auto-publish to GitHub Pages
 ```
 
