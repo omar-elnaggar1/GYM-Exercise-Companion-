@@ -404,3 +404,11 @@ button.slot-btn { width: 44px; flex: none; }
   font-weight: 400;
 }
 .warmup-row.crossed { opacity: 0.45; text-decoration: line-through; }
+
+/* ---------- Units & bar ---------- */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { min-height: 38px; border: 0; border-radius: 0; padding: 0 16px; background: transparent; }
+.seg button.active { background: var(--accent); color: var(--accent-ink); }
+.conv { margin-top: 4px; }
+.bar-btn { min-height: 36px; }
+.bar-pick { margin: 8px 0; padding: 10px; border-radius: 10px; background: var(--card); }

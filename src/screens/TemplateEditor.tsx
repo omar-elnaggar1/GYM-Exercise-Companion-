@@ -4,12 +4,13 @@ import { useState, type ReactNode } from 'react';
 import type { Equipment, Exercise, TemplateItem } from '../db/types';
 import { db } from '../db/db';
 import { byId, useExercises, useTemplates } from '../hooks';
-import { DEFAULT_REST_FIRST, DEFAULT_REST_OTHER } from '../db/actions';
+import { DEFAULT_REST_FIRST, DEFAULT_REST_OTHER, setExerciseBar, setExerciseUnit } from '../db/actions';
+import { barKgFor, fromKg, toKg, unitOf, type Unit } from '../logic/units';
 import { DEFAULT_INCREMENT } from '../db/seed';
 import { Stepper } from '../components/Stepper';
 import { Sheet } from '../components/Sheet';
 
-export function TemplateEditor({ onBack, initialId }: { onBack: () => void; initialId?: string }) {
+export function TemplateEditor({ onBack, initialId, defaultBar = 20 }: { onBack: () => void; initialId?: string; defaultBar?: number }) {
   const templates = useTemplates().filter((x) => !x.archived);
   const exercises = byId(useExercises());
   const [tid, setTid] = useState(initialId ?? 'upper');
@@ -68,9 +69,41 @@ export function TemplateEditor({ onBack, initialId }: { onBack: () => void; init
             <Param label={`Rest (s)${item.restSeconds === undefined ? ' · default' : ''}`}>
               <Stepper compact value={item.restSeconds ?? defRest} min={0} max={600} step={15} onChange={(v) => setItem(i, { restSeconds: Math.round(v) })} label="rest seconds" />
             </Param>
+            {ex && ex.equipment !== 'bodyweight' && !ex.timed && (
+              <Param label="Units">
+                <div className="seg" role="group" aria-label="Weight unit">
+                  {(['kg', 'lb'] as Unit[]).map((u) => (
+                    <button key={u} className={u === unitOf(ex) ? 'active' : ''} onClick={() => setExerciseUnit(ex.id, u)} aria-pressed={u === unitOf(ex)}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </Param>
+            )}
             {ex && (
-              <Param label="Weight jump (kg)">
-                <Stepper compact value={ex.increment} min={0} max={20} step={0.5} onChange={(v) => db.exercises.update(ex.id, { increment: v })} label="weight increment" />
+              <Param label={`Weight jump (${unitOf(ex)})`}>
+                <Stepper
+                  compact
+                  value={fromKg(ex.increment, unitOf(ex))}
+                  min={0}
+                  max={unitOf(ex) === 'lb' ? 50 : 20}
+                  step={unitOf(ex) === 'lb' ? 2.5 : 0.5}
+                  onChange={(v) => db.exercises.update(ex.id, { increment: toKg(v, unitOf(ex)) })}
+                  label="weight increment"
+                />
+              </Param>
+            )}
+            {ex?.equipment === 'barbell' && (
+              <Param label={`Bar (${unitOf(ex)})${ex.barWeight === undefined ? ' · default' : ''}`}>
+                <Stepper
+                  compact
+                  value={fromKg(barKgFor(ex, defaultBar), unitOf(ex))}
+                  min={0}
+                  max={unitOf(ex) === 'lb' ? 100 : 45}
+                  step={unitOf(ex) === 'lb' ? 5 : 0.5}
+                  onChange={(v) => setExerciseBar(ex.id, toKg(v, unitOf(ex)))}
+                  label="bar weight"
+                />
               </Param>
             )}
           </div>

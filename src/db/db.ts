@@ -1,7 +1,7 @@
 // The on-device database (IndexedDB via Dexie). Nothing ever leaves the phone.
 import Dexie, { type Table } from 'dexie';
 import type { BodyweightEntry, Exercise, Settings, Template, Workout } from './types';
-import { buildExercises, buildSettings, buildTemplates } from './seed';
+import { EZ_BAR_IDS, buildExercises, buildSettings, buildTemplates } from './seed';
 import { buildDemoData } from './demo';
 import { todayStr } from '../logic/dates';
 
@@ -42,6 +42,17 @@ class GymDB extends Dexie {
       bodyweight: 'date',
       settings: 'id',
     });
+    // v2: per-exercise bar weight. Give existing EZ-bar exercises a 10 kg bar.
+    this.version(2)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('exercises')
+          .toCollection()
+          .modify((e: Exercise) => {
+            if (EZ_BAR_IDS.includes(e.id) && e.barWeight === undefined) e.barWeight = 10;
+          }),
+      );
   }
 }
 

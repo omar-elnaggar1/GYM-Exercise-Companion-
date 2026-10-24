@@ -1,31 +1,32 @@
 // "Last time", progression suggestions and pre-filling today's sets.
 import type { LoggedSet } from '../db/types';
+import { fmtNum, fromKg, type Unit } from './units';
 
-/** Round to the nearest 0.25 kg so we never show 62.50000001. */
-export const roundKg = (kg: number) => Math.round(kg * 4) / 4;
+/** Remove float noise (62.50000001 -> 62.5) but keep lb conversions precise. */
+export const roundKg = (kg: number) => Math.round(kg * 1000) / 1000;
 
-/** Format a weight: "60", "62.5", or "BW" for bodyweight at 0 kg. */
-export function fmtKg(kg: number): string {
-  return kg === 0 ? 'BW' : String(roundKg(kg));
+/** Format a weight number in `unit`: "60", "62.5", "100", or "BW" for 0. */
+export function fmtKg(kg: number, unit: Unit = 'kg'): string {
+  return kg === 0 ? 'BW' : fmtNum(fromKg(kg, unit));
 }
 
 /**
  * "60 kg × 9, 9, 8" when every set used the same weight,
- * otherwise "60×9, 62.5×8". Timed: "45 s, 40 s".
+ * otherwise "60×9, 62.5×8". Timed: "45 s, 40 s". `unit` = how to show it.
  */
-export function formatLast(sets: LoggedSet[], timed = false): string {
+export function formatLast(sets: LoggedSet[], timed = false, unit: Unit = 'kg'): string {
   const done = sets.filter((s) => s.done);
   if (done.length === 0) return '';
   if (timed) {
     const w = done[0].weight;
     const secs = done.map((s) => `${s.reps} s`).join(', ');
-    return w > 0 && done.every((s) => s.weight === w) ? `${fmtKg(w)} kg · ${secs}` : secs;
+    return w > 0 && done.every((s) => s.weight === w) ? `${fmtKg(w, unit)} ${unit} · ${secs}` : secs;
   }
   const w = done[0].weight;
   if (done.every((s) => s.weight === w)) {
-    return `${fmtKg(w)}${w === 0 ? '' : ' kg'} × ${done.map((s) => s.reps).join(', ')}`;
+    return `${fmtKg(w, unit)}${w === 0 ? '' : ` ${unit}`} × ${done.map((s) => s.reps).join(', ')}`;
   }
-  return done.map((s) => `${fmtKg(s.weight)}×${s.reps}`).join(', ');
+  return done.map((s) => `${fmtKg(s.weight, unit)}×${s.reps}`).join(', ');
 }
 
 /**

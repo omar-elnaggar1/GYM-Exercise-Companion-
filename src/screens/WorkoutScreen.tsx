@@ -5,6 +5,8 @@ import { byId, useExercises, useTemplates } from '../hooks';
 import {
   deleteWorkout,
   finishWorkout,
+  setExerciseBar,
+  setExerciseUnit,
   lastPerformanceMap,
   lastWorkoutNote,
   markAllSetsDone,
@@ -19,7 +21,8 @@ import { warmupSets, type WarmupSet } from '../logic/warmup';
 import { unlockAudio } from '../logic/alerts';
 import { useWakeLock } from '../useWakeLock';
 import { findPRs, fmtSet, isSetPR, type PRRecord } from '../logic/progress';
-import { PLATE_COLOR, platesPerSide } from '../logic/plates';
+import { PLATES, PLATES_LB, PLATE_COLOR, PLATE_COLOR_LB, platesPerSide } from '../logic/plates';
+import { BAR_OPTIONS, LB_STEP, barKgFor, fmtNum, fmtWeight, fromKg, toKg, unitOf, type Unit } from '../logic/units';
 import { Sheet } from '../components/Sheet';
 import { Stepper } from '../components/Stepper';
 import { NoteField } from '../components/NoteField';
@@ -72,6 +75,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
   const template = templates.get(workout.templateId);
   const last = lastPerformanceMap(workouts, id, beforeTs);
   const prevNote = lastWorkoutNote(workouts.filter((w) => w.id !== id), workout.templateId, beforeTs);
+  const defaultBar = settings.barWeight ?? 20;
   // Warm-ups: for the first weighted exercise, and for every barbell lift.
   const firstWeighted = workout.entries.findIndex((e) => {
     const ex = exercises.get(e.exerciseId);
@@ -79,8 +83,12 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
   });
   const warmupFor = (i: number, ex: Exercise, entry: WorkoutEntry): WarmupSet[] => {
     if (isEdit || workout.deload || (i !== firstWeighted && ex.equipment !== 'barbell')) return [];
-    const work = Math.max(0, ...entry.sets.map((s) => s.weight));
-    return warmupSets(work, ex.equipment, settings.barWeight ?? 20, ex.equipment === 'barbell' ? 2.5 : ex.increment || 2.5);
+    // Worked out in the exercise's own unit, so lb machines get 5 lb steps.
+    const unit = unitOf(ex);
+    const work = fromKg(Math.max(0, ...entry.sets.map((s) => s.weight)), unit);
+    const bar = fromKg(barKgFor(ex, defaultBar), unit);
+    const step = unit === 'lb' ? LB_STEP : ex.equipment === 'barbell' ? 2.5 : ex.increment || 2.5;
+    return warmupSets(work, ex.equipment, bar, step);
   };
 
   const updateEntry = (i: number, fn: (e: WorkoutEntry) => WorkoutEntry) =>
@@ -93,7 +101,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
     const rec = records.get(exId);
     if (!isSetPR({ ...set, done: true }, rec)) return;
     navigator.vibrate?.([80, 60, 80]);
-    setToast(`🏆 New PR! ${exercises.get(exId)?.name}: ${fmtSet(set, rec!.metric)}`);
+    setToast(`🏆 New PR! ${exercises.get(exId)?.name}: ${fmtSet(set, rec!.metric, unitOf(exercises.get(exId)))}`);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(''), 3500);
   };
@@ -182,7 +190,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
             last={last.get(ex.id)}
             record={records.get(ex.id)}
             warmup={warmupFor(i, ex, entry)}
-            barWeight={settings.barWeight ?? 20}
+            barDisplay={fromKg(barKgFor(ex, defaultBar), unitOf(ex))}
             deload={workout.deload}
             onTick={(s) => tick(i, s)}
             onEdit={(s) => setEditing({ entry: i, set: s })}
@@ -218,7 +226,7 @@ export function WorkoutScreen({ workout, settings, workouts, onStartRest, onClos
       {editing && edit && editEx && (
         <SetEditor
           ex={editEx}
-          barWeight={settings.barWeight ?? 20}
+          defaultBar={defaultBar}
           set={edit.sets[editing.set]}
           index={editing.set}
           onSave={(patch, andTick) => {
@@ -282,7 +290,7 @@ function ExerciseCard({
   last,
   record,
   warmup,
-  barWeight,
+  barDisplay,
   deload,
   onTick,
   onEdit,
@@ -296,7 +304,8 @@ function ExerciseCard({
   last?: LastPerf;
   record?: PRRecord;
   warmup: WarmupSet[];
-  barWeight: number;
+  /** Empty bar in the exercise's unit. */
+  barDisplay: number;
   deload: boolean;
   onTick: (s: number) => void;
   onEdit: (s: number) => void;
@@ -308,6 +317,7 @@ function ExerciseCard({
   const [showNote, setShowNote] = useState(!!entry.note);
   const up = last && !deload ? suggestProgression(last.sets, entry.sets.length, entry.repMax, ex.increment) : null;
   const unit = ex.timed ? 's' : 'reps';
+  const wu = unitOf(ex);
   const doneCount = entry.sets.filter((s) => s.done).length;
 
   return (
@@ -325,15 +335,17 @@ function ExerciseCard({
       <div className="small" style={{ marginTop: 6 }}>
         {last ? (
           <>
-            <span className="muted">Last ({formatNiceDate(last.date)}):</span> <b>{formatLast(last.sets, ex.timed)}</b>
+            <span className="muted">Last ({formatNiceDate(last.date)}):</span> <b>{formatLast(last.sets, ex.timed, wu)}</b>
           </>
         ) : (
           <span className="muted">First time - pick a weight you can do with good form.</span>
         )}
       </div>
       {last?.note && <div className="note-line">📝 {last.note}</div>}
-      {up !== null && <span className="badge-up">⬆ Add weight today: {up} kg (+{ex.increment})</span>}
-      {warmup.length > 0 && <Warmup sets={warmup} barbell={ex.equipment === 'barbell'} bar={barWeight} />}
+      {up !== null && (
+        <span className="badge-up">⬆ Add weight today: {fmtWeight(up, wu)} (+{fmtNum(fromKg(ex.increment, wu))})</span>
+      )}
+      {warmup.length > 0 && <Warmup sets={warmup} barbell={ex.equipment === 'barbell'} bar={barDisplay} unit={wu} />}
 
       {entry.sets.map((s, k) => (
         <div key={k} className={'set-row' + (s.done ? ' done' : '') + (isSetPR(s, record) ? ' pr' : '')}>
@@ -341,12 +353,19 @@ function ExerciseCard({
           <button className="val" onClick={() => onEdit(k)} aria-label={`Edit set ${k + 1}`}>
             {ex.timed ? (
               <>
-                {s.weight > 0 && <>{fmtKg(s.weight)}<span className="unit"> kg · </span></>}
+                {s.weight > 0 && <>{fmtKg(s.weight, wu)}<span className="unit"> {wu} · </span></>}
                 {s.reps}<span className="unit"> s</span>
               </>
             ) : (
               <>
-                {s.weight === 0 ? <span className="unit">{ex.equipment === 'bodyweight' ? 'BW' : '– kg'}</span> : <>{fmtKg(s.weight)}<span className="unit"> kg</span></>}
+                {s.weight === 0 ? (
+                  <span className="unit">{ex.equipment === 'bodyweight' ? 'BW' : `– ${wu}`}</span>
+                ) : (
+                  <>
+                    {fmtKg(s.weight, wu)}
+                    <span className="unit"> {wu}</span>
+                  </>
+                )}
                 <span className="unit"> × </span>
                 {s.reps}
               </>
@@ -375,7 +394,7 @@ function ExerciseCard({
 
 function SetEditor({
   ex,
-  barWeight,
+  defaultBar,
   set,
   index,
   onSave,
@@ -383,22 +402,46 @@ function SetEditor({
   onClose,
 }: {
   ex: Exercise;
-  barWeight: number;
+  /** Settings bar weight in kg, used when the exercise has none of its own. */
+  defaultBar: number;
   set: LoggedSet;
   index: number;
   onSave: (patch: Partial<LoggedSet>, andTick: boolean) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const [weight, setWeight] = useState(set.weight);
+  // What you type is in the exercise's unit; it is saved in kg.
+  const [unit, setUnit] = useState<Unit>(unitOf(ex));
+  const [value, setValue] = useState(fromKg(set.weight, unit));
   const [reps, setReps] = useState(set.reps);
+  const weight = toKg(value, unit);
+  // Weight jump in the unit you're typing in (5 lb after switching to lb).
+  const step = unit === 'lb' ? (unitOf(ex) === 'lb' ? fromKg(ex.increment, 'lb') : LB_STEP) : ex.increment || 1;
+
+  const switchUnit = (u: Unit) => {
+    if (u === unit) return;
+    setValue(fromKg(weight, u));
+    setUnit(u);
+    void setExerciseUnit(ex.id, u); // remembered for this exercise
+  };
+
   return (
     <Sheet title={`${ex.name} · set ${index + 1}`} onClose={onClose}>
-      <label className="field">
-        <span>Weight (kg){ex.equipment === 'bodyweight' ? ' - extra weight, 0 = bodyweight' : ''}</span>
-        <Stepper value={weight} onChange={setWeight} step={ex.increment || 1} label="weight" />
-      </label>
-      {ex.equipment === 'barbell' && weight > 0 && <PlateView total={weight} bar={barWeight} />}
+      <div className="field">
+        <div className="row spread" style={{ marginBottom: 4 }}>
+          <span className="muted small">Weight{ex.equipment === 'bodyweight' ? ' (extra, 0 = bodyweight)' : ''}</span>
+          <div className="seg" role="group" aria-label="Weight unit">
+            {(['kg', 'lb'] as Unit[]).map((u) => (
+              <button key={u} className={u === unit ? 'active' : ''} onClick={() => switchUnit(u)} aria-pressed={u === unit}>
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Stepper value={value} onChange={setValue} step={step} label={`weight in ${unit}`} />
+        {unit === 'lb' && value > 0 && <div className="small muted conv">= {fmtNum(weight)} kg (saved in kg)</div>}
+      </div>
+      {ex.equipment === 'barbell' && weight > 0 && <PlateView total={weight} ex={ex} defaultBar={defaultBar} />}
       <label className="field">
         <span>{ex.timed ? 'Seconds' : 'Reps'}</span>
         <Stepper value={reps} onChange={(v) => setReps(Math.round(v))} step={ex.timed ? 5 : 1} label={ex.timed ? 'seconds' : 'reps'} />
@@ -451,7 +494,7 @@ function SwapSheet({
           <button key={e.id} className="list-btn" onClick={() => setChosen(e.id)}>
             <span>
               {e.name}
-              <div className="muted small">{lp ? `Last: ${formatLast(lp.sets, e.timed)}` : e.equipment}</div>
+              <div className="muted small">{lp ? `Last: ${formatLast(lp.sets, e.timed, unitOf(e))}` : e.equipment}</div>
             </span>
             <span>›</span>
           </button>
@@ -461,12 +504,45 @@ function SwapSheet({
   );
 }
 
-/** Shows which plates to load on each side of the bar. */
-function PlateView({ total, bar }: { total: number; bar: number }) {
-  const r = platesPerSide(total, bar);
+/** Shows which plates to load on each side of the bar, and lets you change the bar. */
+function PlateView({ total, ex, defaultBar }: { total: number; ex: Exercise; defaultBar: number }) {
+  const [picking, setPicking] = useState(false);
+  const unit = unitOf(ex);
+  const bar = fromKg(barKgFor(ex, defaultBar), unit);
+  const r = platesPerSide(fromKg(total, unit), bar, unit === 'lb' ? PLATES_LB : PLATES);
+  const colors = unit === 'lb' ? PLATE_COLOR_LB : PLATE_COLOR;
+  const options = [...new Set([...BAR_OPTIONS[unit], bar])].sort((a, b) => b - a);
+
   return (
     <div className="card" style={{ background: 'var(--card-2)', marginTop: -4 }}>
-      <div className="small muted">Plates per side ({bar} kg bar)</div>
+      <div className="row spread">
+        <span className="small muted">Plates per side</span>
+        <button className="small bar-btn" onClick={() => setPicking((v) => !v)} aria-expanded={picking}>
+          Bar: {fmtNum(bar)} {unit} ✎
+        </button>
+      </div>
+      {picking && (
+        <div className="bar-pick">
+          <div className="small muted">Empty bar for {ex.name}:</div>
+          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+            {options.map((o) => (
+              <button
+                key={o}
+                className={'small' + (o === bar ? ' primary' : '')}
+                onClick={() => {
+                  void setExerciseBar(ex.id, toKg(o, unit));
+                  setPicking(false);
+                }}
+              >
+                {fmtNum(o)} {unit}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <Stepper compact value={bar} min={0} max={100} step={unit === 'lb' ? 5 : 0.5} onChange={(v) => setExerciseBar(ex.id, toKg(v, unit))} label="bar weight" />
+          </div>
+        </div>
+      )}
       {!r ? (
         <div className="small">Lighter than the bar.</div>
       ) : (
@@ -477,22 +553,24 @@ function PlateView({ total, bar }: { total: number; bar: number }) {
               <span
                 key={i}
                 className="plate"
-                style={{ height: 30 + p * 1.4, background: PLATE_COLOR[p], color: p === 5 || p === 15 ? '#111' : '#fff' }}
+                style={{ height: 30 + (unit === 'lb' ? p * 0.64 : p * 1.4), background: colors[p], color: colors[p] === '#e5e7eb' || colors[p] === '#eab308' ? '#111' : '#fff' }}
               >
                 {p}
               </span>
             ))}
           </div>
-          <b>{r.perSide.length ? `${r.perSide.join(' + ')} kg each side` : 'Empty bar'}</b>
-          {r.remainder > 0 && <div className="small" style={{ color: 'var(--warn)' }}>+{r.remainder} kg per side can't be made with standard plates</div>}
+          <b>{r.perSide.length ? `${r.perSide.join(' + ')} ${unit} each side` : 'Empty bar'}</b>
+          {r.remainder > 0 && (
+            <div className="small" style={{ color: 'var(--warn)' }}>+{r.remainder} {unit} per side can't be made with standard plates</div>
+          )}
         </>
       )}
     </div>
   );
 }
 
-/** Collapsible warm-up suggestion. Tap a row to cross it off (not saved). */
-function Warmup({ sets, barbell, bar }: { sets: WarmupSet[]; barbell: boolean; bar: number }) {
+/** Collapsible warm-up suggestion. Tap a row to cross it off (not saved). Weights are in `unit`. */
+function Warmup({ sets, barbell, bar, unit }: { sets: WarmupSet[]; barbell: boolean; bar: number; unit: Unit }) {
   const [open, setOpen] = useState(false);
   const [crossed, setCrossed] = useState<Set<number>>(new Set());
   return (
@@ -503,8 +581,8 @@ function Warmup({ sets, barbell, bar }: { sets: WarmupSet[]; barbell: boolean; b
       {open && (
         <div>
           {sets.map((w, i) => {
-            const plates = barbell ? platesPerSide(w.weight, bar) : null;
-            const label = barbell && w.weight === bar ? 'Empty bar' : `${w.weight} kg`;
+            const plates = barbell ? platesPerSide(w.weight, bar, unit === 'lb' ? PLATES_LB : PLATES) : null;
+            const label = barbell && w.weight === bar ? 'Empty bar' : `${fmtNum(w.weight)} ${unit}`;
             return (
               <button
                 key={i}

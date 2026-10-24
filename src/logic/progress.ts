@@ -2,6 +2,7 @@
 // records, biggest improvements and weekly volume. All pure functions.
 import type { Exercise, LoggedSet, Workout } from '../db/types';
 import { addDays, daysBetween } from './dates';
+import { fmtNum, fromKg, type Unit } from './units';
 
 /** Estimated 1-rep max (Epley formula). 60 kg × 10 ≈ 80 kg. */
 export function e1rm(weight: number, reps: number): number {
@@ -218,13 +219,13 @@ export function workoutVolume(w: Workout): number {
 }
 
 /** "62.5 kg × 8", "BW × 12", "45 s" */
-export function fmtSet(s: LoggedSet, metric: Metric): string {
+export function fmtSet(s: LoggedSet, metric: Metric, unit: Unit = 'kg'): string {
   if (metric === 'seconds') return `${s.reps} s`;
-  return s.weight > 0 ? `${Math.round(s.weight * 4) / 4} kg × ${s.reps}` : `BW × ${s.reps}`;
+  return s.weight > 0 ? `${fmtNum(fromKg(s.weight, unit))} ${unit} × ${s.reps}` : `BW × ${s.reps}`;
 }
 
 export function fmtValue(v: number, metric: Metric): string {
-  if (metric === 'e1rm') return `${Math.round(v * 2) / 2} kg`;
+  if (metric === 'e1rm') return `${fmtNum(Math.round(v * 2) / 2)} kg`;
   return metric === 'seconds' ? `${Math.round(v)} s` : `${Math.round(v)} reps`;
 }
 

@@ -6,6 +6,7 @@ import { nextTrainingSlot, todayStatus } from '../logic/rotation';
 import { acceptDeload, deloadStatus, skipDeload } from '../logic/deload';
 import { formatNiceDate, todayStr } from '../logic/dates';
 import { formatLast, suggestProgression } from '../logic/progression';
+import { fmtWeight, unitOf } from '../logic/units';
 import { lastPerformanceMap, lastWorkoutNote, startWorkout } from '../db/actions';
 import { updateSettings } from '../db/db';
 import { reminderDue } from '../useReminders';
@@ -204,9 +205,9 @@ export function TodayScreen({
                       {ex.perSide ? ' /side' : ''}
                     </span>
                   </div>
-                  <div className="muted small">{lp ? `Last: ${formatLast(lp.sets, ex.timed)}` : 'No history yet'}</div>
+                  <div className="muted small">{lp ? `Last: ${formatLast(lp.sets, ex.timed, unitOf(ex))}` : 'No history yet'}</div>
                   {lp?.note && <div className="note-line">📝 {lp.note}</div>}
-                  {up !== null && <span className="badge-up">⬆ Add weight today: {up} kg</span>}
+                  {up !== null && <span className="badge-up">⬆ Add weight today: {fmtWeight(up, unitOf(ex))}</span>}
                 </div>
               );
             })}

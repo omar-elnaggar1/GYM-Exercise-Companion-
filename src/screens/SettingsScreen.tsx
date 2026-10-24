@@ -39,7 +39,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
   if (page === 'split') {
     return <SplitEditor settings={settings} onBack={() => setPage('main')} onEditExercises={(id) => setPage({ templateId: id, from: 'split' })} />;
   }
-  if (page !== 'main') return <TemplateEditor initialId={page.templateId} onBack={() => setPage(page.from)} />;
+  if (page !== 'main') return <TemplateEditor initialId={page.templateId} defaultBar={settings.barWeight ?? 20} onBack={() => setPage(page.from)} />;
 
   const status = todayStatus(settings.rotationState, settings.rotation, today);
   const deload = deloadStatus(settings, today);
@@ -99,11 +99,15 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
       <h2>Plate calculator</h2>
       <div className="card">
         <label className="field" style={{ marginBottom: 0 }}>
-          <span>Barbell weight (shown when you edit a barbell set)</span>
+          <span>Default bar weight (for barbell exercises without their own)</span>
           <select value={settings.barWeight ?? 20} onChange={(e) => updateSettings({ barWeight: Number(e.target.value) })}>
             {[20, 15, 10, 7.5, 5].map((n) => <option key={n} value={n}>{n} kg{n === 20 ? ' (standard Olympic bar)' : n === 15 ? ' (women’s bar)' : ''}</option>)}
           </select>
         </label>
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          Change the bar for one exercise (e.g. EZ bar 10 kg) by tapping “Bar” when you edit a set, or in Edit session exercises.
+          Machines in pounds: tap “lb” when you edit a set - it’s remembered for that exercise and saved in kg.
+        </p>
       </div>
 
       <h2>Reminders</h2>

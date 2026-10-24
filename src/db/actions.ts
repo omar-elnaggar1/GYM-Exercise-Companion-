@@ -1,7 +1,8 @@
 // Everything that changes data lives here, so screens stay simple.
 import { db, getSettings, updateSettings } from './db';
 import type { Exercise, LoggedSet, Slot, Template, Workout, WorkoutEntry } from './types';
-import { DEFAULT_ROTATION, buildTemplates } from './seed';
+import { DEFAULT_INCREMENT, DEFAULT_ROTATION, buildTemplates } from './seed';
+import { LB_STEP, toKg, type Unit } from '../logic/units';
 import { advanceAfterWorkout, findSlotFor, resolveRotation } from '../logic/rotation';
 import { prefillSets } from '../logic/progression';
 import { addDays, daysBetween, todayStr } from '../logic/dates';
@@ -327,4 +328,26 @@ export async function markBackedUp(): Promise<void> {
 
 export async function snoozeBackupReminder(days = 3): Promise<void> {
   await updateSettings({ backupSnoozedUntil: addDays(todayStr(), days) });
+}
+
+// ---------- Units & bar weight ----------
+
+/**
+ * Switch an exercise between kg and lb. Weights stay stored in kg; only
+ * how you enter/see them changes. The weight jump and bar reset to the
+ * usual ones for that unit (5 lb / your kg default).
+ */
+export async function setExerciseUnit(id: string, unit: Unit): Promise<void> {
+  const ex = await db.exercises.get(id);
+  if (!ex || (ex.unit ?? 'kg') === unit) return;
+  await db.exercises.update(id, {
+    unit,
+    increment: unit === 'lb' ? toKg(LB_STEP, 'lb') : DEFAULT_INCREMENT[ex.equipment],
+    barWeight: undefined,
+  });
+}
+
+/** Empty bar for one exercise, in kg (undefined = use the default). */
+export async function setExerciseBar(id: string, kg: number | undefined): Promise<void> {
+  await db.exercises.update(id, { barWeight: kg });
 }

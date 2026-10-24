@@ -15,6 +15,10 @@ export interface Exercise {
   perSide?: boolean;
   /** Ids of exercises that train the same muscle, offered in "Swap". */
   alternatives: string[];
+  /** Entered/shown in pounds (stored in kg). Default kg. */
+  unit?: 'kg' | 'lb';
+  /** Empty bar for this exercise in kg (barbell lifts). Default: the Settings bar. */
+  barWeight?: number;
 }
 
 export interface TemplateItem {

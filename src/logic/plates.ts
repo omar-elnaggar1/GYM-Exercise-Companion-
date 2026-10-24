@@ -12,6 +12,18 @@ export const PLATE_COLOR: Record<number, string> = {
   1.25: '#9ca3af',
 };
 
+/** Pound plates (US gyms). */
+export const PLATES_LB = [45, 35, 25, 10, 5, 2.5];
+
+export const PLATE_COLOR_LB: Record<number, string> = {
+  45: '#2563eb',
+  35: '#eab308',
+  25: '#16a34a',
+  10: '#e5e7eb',
+  5: '#1f2937',
+  2.5: '#9ca3af',
+};
+
 export interface PlateResult {
   perSide: number[];
   /** Kg per side that can't be made with the plates (0 = exact). */

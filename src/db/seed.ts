@@ -10,7 +10,10 @@ export const DEFAULT_INCREMENT: Record<Equipment, number> = {
   bodyweight: 2.5,
 };
 
-type Def = [name: string, equipment: Equipment, extra?: { timed?: boolean; perSide?: boolean }];
+type Def = [name: string, equipment: Equipment, extra?: { timed?: boolean; perSide?: boolean; barWeight?: number }];
+
+/** EZ bars are usually ~10 kg, not 20. */
+export const EZ_BAR_IDS = ['ez-curl', 'ez-skull-crusher', 'reverse-ez-curl'];
 
 /** Every exercise the app knows about, keyed by id. */
 const LIB: Record<string, Def> = {
@@ -40,7 +43,7 @@ const LIB: Record<string, Def> = {
   'straight-arm-pulldown': ['Straight-arm pulldown', 'cable'],
   'db-curl': ['Dumbbell curl', 'dumbbell'],
   'barbell-curl': ['Barbell curl', 'barbell'],
-  'ez-curl': ['EZ-bar curl', 'barbell'],
+  'ez-curl': ['EZ-bar curl', 'barbell', { barWeight: 10 }],
   'cable-curl': ['Cable curl', 'cable'],
   'preacher-curl-machine': ['Preacher curl machine', 'machine'],
   'incline-db-curl': ['Incline dumbbell curl', 'dumbbell'],
@@ -48,12 +51,12 @@ const LIB: Record<string, Def> = {
   'hammer-curl': ['Hammer curl', 'dumbbell'],
   'rope-hammer-curl': ['Cable rope hammer curl', 'cable'],
   'cross-body-hammer': ['Cross-body hammer curl', 'dumbbell'],
-  'reverse-ez-curl': ['Reverse-grip EZ-bar curl', 'barbell'],
+  'reverse-ez-curl': ['Reverse-grip EZ-bar curl', 'barbell', { barWeight: 10 }],
   'triceps-pushdown': ['Cable triceps pushdown', 'cable'],
   'overhead-cable-ext': ['Overhead cable triceps extension', 'cable'],
   'overhead-db-ext': ['Overhead dumbbell triceps extension', 'dumbbell'],
   'lying-db-ext': ['Lying dumbbell triceps extension', 'dumbbell'],
-  'ez-skull-crusher': ['EZ-bar skull crusher', 'barbell'],
+  'ez-skull-crusher': ['EZ-bar skull crusher', 'barbell', { barWeight: 10 }],
   'dips': ['Dips', 'bodyweight'],
   'close-grip-bench': ['Close-grip bench press', 'barbell'],
   'machine-triceps-ext': ['Machine triceps extension', 'machine'],

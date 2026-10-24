@@ -5,6 +5,7 @@ import { byId, useExercises, useTemplates } from '../hooks';
 import { computeStreak, toStreakWorkouts } from '../logic/streak';
 import { addDays, formatNiceDate, todayStr, toDateStr } from '../logic/dates';
 import { formatLast } from '../logic/progression';
+import { unitOf } from '../logic/units';
 import { deleteWorkout, logPastWorkout } from '../db/actions';
 import { todayStatus } from '../logic/rotation';
 import { Sheet } from '../components/Sheet';
@@ -125,7 +126,7 @@ export function HistoryScreen({
           {open.note && <div className="note-line" style={{ marginBottom: 10 }}>📝 {open.note}</div>}
           {open.entries.map((e, i) => {
             const ex = exercises.get(e.exerciseId);
-            const txt = formatLast(e.sets, ex?.timed);
+            const txt = formatLast(e.sets, ex?.timed, unitOf(ex));
             return (
               <div key={i} className="ex-line">
                 <b>{ex?.name ?? e.exerciseId}</b>

@@ -21,6 +21,8 @@ No account, no server: all your data stays on the phone itself.
 - **Edit past workouts** and **log a workout after the fact** (forgot your phone?) from the History tab.
 - **Warm-up sets:** suggested ramp-up sets (with plates) before your first heavy lift.
 - **Backup reminder:** a banner if you haven't exported a backup in 14 days.
+- **Bar weight per exercise:** e.g. EZ bar 10 kg, bench 20 kg. The plate calculator and warm-ups use it.
+- **kg or lb per exercise:** enter a machine's weight in pounds; it's saved and charted in kg.
 
 ---
 
@@ -136,6 +138,13 @@ To change the exercises inside a session (sets, reps, rest time, weight jump), u
 - Tap any exercise in "Recent PRs", "Biggest improvements" or "All personal records" to see its chart. Tap the chart to read any session.
 - **Plate calculator:** set your bar weight in **Settings → Plate calculator** (default 20 kg).
 
+## Pounds (lb) and bar weights
+
+- **Machines in pounds:** when you edit a set, tap **lb** above the weight. Type the number shown on the machine, and the app shows the kg equivalent ("= 45.4 kg") and saves it in kg. That exercise stays in lb from then on: sets, "Last time" and the "+ weight" suggestion all show lb, and the weight jump becomes 5 lb. Tap **kg** to switch back.
+- **Progress, PRs, History totals and volume are always in kg**, so everything is comparable.
+- **Bar weight per exercise:** in the set editor of a barbell lift, tap **Bar: 20 kg ✎** and pick the bar (20 / 15 / 10 / 7.5 / 5 kg, or 45 / 35 / 25 / 15 lb). It's remembered for that exercise. You can also set it in **Edit session exercises**. EZ-bar exercises start at 10 kg.
+- **Settings → Plate calculator** sets the default bar for exercises that don't have their own. A barbell lift switched to lb uses a 45 lb bar and lb plates (45 / 35 / 25 / 10 / 5 / 2.5).
+
 ## Fixing and adding past workouts
 
 - **Edit:** History → tap a workout → **✏️ Edit workout**. You can change any set (tap it), tick or untick sets, swap exercises, change the date, and add notes. "Last time" and records only compare with workouts *before* that one.
@@ -173,7 +182,7 @@ src/
                demo.ts (tutorial sample data), db.ts (on-phone database + tutorial mode),
                actions.ts (start/finish/swap/backup/split editing)
   logic/       pure functions + tests: rotation, progression, streak, deload, reminders,
-               progress (e1RM, PRs, volume), plates, warmup, backup
+               progress (e1RM, PRs, volume), plates, warmup, backup, units (kg/lb)
   screens/     Today, Workout, Progress, History, Body, Settings, SplitEditor, TemplateEditor
   components/  RestTimer, Stepper, Sheet, NoteField, WeightChart, LineChart, BarChart, Tour (tutorial)
 .github/workflows/deploy.yml   auto-publish to GitHub Pages
